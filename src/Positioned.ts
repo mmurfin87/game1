@@ -1,0 +1,1 @@
+type Positioned = City | Soldier;
