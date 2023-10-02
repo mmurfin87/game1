@@ -1,142 +1,160 @@
-const canvas: HTMLCanvasElement = document.getElementById('gameCanvas') as HTMLCanvasElement;
-const ctx: CanvasRenderingContext2D = canvas.getContext('2d') || (() =>{throw new Error("No context")})();
-const nextTurn: HTMLButtonElement = document.getElementById("nextTurn") as HTMLButtonElement;
+import { City } from "./City.js";
+import { GameState } from "./GameState.js";
+import { Player } from "./Player.js";
+import { Point2d } from "./Point2d.js";
+import { Positioned } from "./Positioned.js";
+import { Renderer } from "./Renderer.js";
+import { Soldier } from "./Soldier.js";
+import { Tile, Terrain } from "./Tile.js";
+import { Action } from "./actions/Action.js";
+import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
+import { SettleAction } from "./actions/SettleAction.js";
+import { TargetMoveAction } from "./actions/TargetMoveAction.js";
 
-const tileSize: number = 40;
-const numRows: number = 12;
-const numCols: number = 12;
+const gameState: GameState = (() => {
+	const numRows = 10, numCols = 10;
+	const barbarianPlayer = new Player(0);
+	const humanPlayer = new Player(1);
+	return new GameState(
+		0,
+		new Array(numRows * numCols).fill(null),
+		500/numRows,
+		numRows,
+		numCols,
+		[],
+		[],
+		barbarianPlayer,
+		humanPlayer,
+		[ barbarianPlayer, humanPlayer, new Player(2) ],
+		null
+	);
+})();
 
-const map: Tile[] = new Array(numRows * numCols).fill(null);
-const cities: City[] = [];
-const soldiers: Soldier[] = [];
-const barbarianPlayer = new Player(0);
-const humanPlayer = new Player(1);
-const players: Player[] = [ barbarianPlayer, humanPlayer, new Player(2) ];
-let lastTime: number;
-let selection: Positioned | null = null;
+const renderer: Renderer = (() => {
+	const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+	return new Renderer(
+		canvas,
+		canvas.getContext('2d') as CanvasRenderingContext2D,
+		document.getElementById("actions") as HTMLDivElement,
+		document.getElementById("unit-actions") as HTMLElement,
+		document.getElementById("nextTurn") as HTMLButtonElement
+	);
+})();
 
-// Other code related to the game loop and event handling
-
-// Function to generate random cities
-function generateRandomCities() {
-
-	for (let row = 0; row < numRows; row++)
-	{
-		for (let col = 0; col < numCols; col++)
-		{
-			const rand = Math.random();
-			let terrain: Terrain = Terrain.GRASSLAND;
-			if (rand < 0.55)
-				terrain = Terrain.GRASSLAND;
-			else if (rand < 0.8)
-				terrain = Terrain.FOREST;
-			else if (rand < 0.9)
-				terrain = Terrain.MOUNTAINS;
-			else
-				terrain = Terrain.WATER;
-			map[row * numRows + col] = new Tile(terrain);
-
-			if (Math.random() < 0.1) {
-				cities.push(new City(row, col, barbarianPlayer));
-			}
-		}
-	}
-
-	cities[0].player = humanPlayer;
-	cities[cities.length-1].player = players[players.length-1];
-}
+const instawin = element("button", { "type": "button" }, "Insta-Win");
+instawin.addEventListener("click", () => gameState.cities.forEach(city => city.player = gameState.humanPlayer));
+(document.getElementById("actions") as HTMLElement).appendChild(instawin);
 
 // Call the function to generate random cities
-generateRandomCities();
+gameState.generateRandomCities();
 
 // Start the game loop
-requestAnimationFrame(gameLoop);
+requestAnimationFrame(() => renderer.render(gameState));
 
 // Handle right-click events to move soldiers
-canvas.addEventListener('contextmenu', (e: MouseEvent) => {
-	if (!selection)
+renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
+	if (!gameState.selection)
 		return;
 
 	e.preventDefault(); // Prevent the default context menu
-
+	console.log("Right Click");
 	const clickX: number = e.offsetX;
 	const clickY: number = e.offsetY;
 
-	switch (selection.type)
+	switch (gameState.selection.type)
 	{
 		case "City":
 		{
-			let targetCity: City | null = target(e.offsetX, e.offsetY, humanPlayer, "City") as City;
-
-			if (targetCity && targetCity !== selection) {
-				// Create a soldier at the selected city
-				const newSoldier = new Soldier(selection.row, selection.col, humanPlayer, 500);
-
-				// Set the soldier's target to the target city
-				newSoldier.moveTo(targetCity.row, targetCity.col);
-
-				// Add the soldier to the soldiers array
-				soldiers.push(newSoldier);
-
-				// Clear the selection
-				selection = null;
-			}
 			break;
 		}
 		case "Soldier":
 		{
-			(selection as Soldier).moveTo(Math.floor(clickY/tileSize), Math.floor(clickX/tileSize));
+			const soldier: Soldier = gameState.selection as Soldier;
+			const origin: Point2d = new Point2d(gameState.selection.col, gameState.selection.row);
+			const target: Point2d = new Point2d(clickX, clickY).stepScale(gameState.tileSize);
+			const distanceToTarget = origin.stepsTo(target);
+			if (distanceToTarget <= soldier.movesLeft)
+			{
+				const targetTerrain: Terrain = gameState.map[target.y * gameState.numRows + target.x].terrain;
+				if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
+					console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
+				else
+				{
+					console.log(`Target (${target.y},${target.x}) distance ${distanceToTarget} in range ${soldier.movesLeft}`);
+					soldier.moveTo(target);
+				}
+			}
+			else
+				console.log(`Target (${target.y},${target.x}) distance ${distanceToTarget} out of range ${soldier.movesLeft}`);
 			break;
 		}
 	}
+
+	calculateActions();
 });
 
 // Handle click events to create soldiers and select soldiers
-canvas.addEventListener('click', (e: MouseEvent) => {
-	
-	selection = select(e.offsetX, e.offsetY, humanPlayer);
+renderer.canvas.addEventListener('click', (e: MouseEvent) => {
+	gameState.selection = gameState.select(e.offsetX, e.offsetY, gameState.humanPlayer);
+	if (gameState.selection)
+		calculateActions();
 });
 
-function select(x: number, y: number, player:Player, restrictType?: Positioned['type']): Positioned | null
+renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
+	console.log('Next Turn');
+	gameState.soldiers.forEach(s => s.movesLeft = s.moves);
+	gameState.cities.forEach(s => s.movesLeft = s.moves);
+	calculateActions();
+});
+
+function element(tag: string, attrs?: Record<string, string>, text?: string): HTMLElement
 {
-	const r = Math.floor(y / tileSize), c = Math.floor(x / tileSize);
-
-	// Check for soldier selection first
-	for (const posArray of [soldiers, cities])
-	{
-		for (const pos of posArray)
-		{
-			if (r == pos.row && c == pos.col && pos.player.id == player.id && (!restrictType || pos.type === restrictType))
-			{
-				console.log(`Selected ${pos.type} (${pos.row},${pos.col}`);
-				return pos;
-			}
-			
-		}
-	}
-
-	return null;
+	const e = document.createElement(tag);
+	if (attrs)
+		Object.keys(attrs).forEach(k => e.setAttribute(k, attrs[k]));
+	if (text)
+		e.appendChild(document.createTextNode(text));
+	return e;
 }
 
-function target<T extends Positioned>(x: number, y: number, player: Player, restrictType?: T['type']): T | null
+function calculateActions()
 {
-	const r = Math.floor(y / tileSize), c = Math.floor(x / tileSize);
+	while (renderer.unitActions.hasChildNodes())
+			renderer.unitActions.removeChild(renderer.unitActions.lastChild as Node);
 
-	// Check for soldier selection first
-	for (const posArray of [soldiers, cities])
+	if (gameState.selection == null)
+		return;
+
+	let actions: Action[] = [];
+	switch (gameState.selection.type)
 	{
-		for (const pos of posArray)
-		{
-			if (r == pos.row && c == pos.col && (!restrictType || pos.type === restrictType))
-			{
-				// Can't stack soldiers
-				if (pos.type == "Soldier" && pos.player.id == player.id)
-					break;
-				console.log(`Selected ${pos.type} (${pos.row},${pos.col}`);
-				return pos as T;
-			}
-		}
+		case "City":
+			actions = [
+				new BuildSoldierAction(gameState.humanPlayer, gameState.selection, gameState.soldiers)
+			];
+			break;
+		case "Soldier":
+			actions = [
+				new TargetMoveAction(gameState.selection),
+				new SettleAction(gameState.humanPlayer, gameState.selection, gameState.search.bind(gameState))
+			]
+			break;
 	}
 
-	return null;
+	for (const action of actions)
+	{
+		const cost = action.prepare();
+		if (cost < 0 || cost > gameState.selection.movesLeft)
+			continue;
+		const actionButton = element("button", { "type": "button" }, action.name());
+		const target = gameState.selection;
+		actionButton.addEventListener("click", () => {
+			action.execute()
+			target.movesLeft -= cost;
+			console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${target.type} with ${target.movesLeft} move${target.movesLeft == 1 ? '' : 's'} left`);
+			gameState.selection = null;
+			calculateActions();
+		});
+		renderer.unitActions.appendChild(actionButton);
+	}
 }

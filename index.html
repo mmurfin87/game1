@@ -2,11 +2,6 @@
 <html>
 <head>
 	<title>Game1</title>
-	<script src="dist/Graphics.js"></script>
-	<script src="dist/Player.js"></script>
-	<script src="dist/City.js"></script>
-	<script src="dist/Soldier.js"></script>
-	<script src="dist/Tile.js"></script>
 	<style>
         canvas
 		{
@@ -15,8 +10,11 @@
     </style>
 </head>
 <body>
-	<button type="button" id="nextTurn">Next Turn</button>
 	<canvas id="gameCanvas" width="500" height="500"></canvas>
-	<script src="dist/main.js"></script>
+	<div id="actions">
+		<button type="button" id="nextTurn">Next Turn</button>
+		<span id="unit-actions"></span>
+	</div>
+	<script src="dist/main.js" type="module"></script>
 </body>
 </html>

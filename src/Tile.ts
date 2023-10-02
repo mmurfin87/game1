@@ -1,4 +1,4 @@
-enum Terrain
+export enum Terrain
 {
 	GRASSLAND = "Grassland",
 	FOREST = "Forest",
@@ -6,7 +6,7 @@ enum Terrain
 	WATER = "Water"
 }
 
-class Tile
+export class Tile
 {
 	constructor(
 		public terrain: Terrain

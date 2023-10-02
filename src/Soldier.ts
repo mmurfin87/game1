@@ -1,6 +1,10 @@
-class Soldier
+import { distance } from "./Util.js";
+import { Player } from "./Player.js";
+import { Point2d } from "./Point2d.js";
+
+export class Soldier
 {
-	readonly type: string = "Soldier";
+	public readonly type = "Soldier";
 	private target: {row: number, col: number} | null = null;
 	private moveStartRealTime: number | null = null;
 	private moveStartGameTime: number | null = null;
@@ -9,16 +13,22 @@ class Soldier
 		public row: number, 
 		public col: number, 
 		public player: Player,
-		public moves: number)
+		public moves: number,
+		public movesLeft: number = moves)
 	{
 	}
 
-	moveTo(targetRow: number, targetCol: number): boolean {
-		if (distance(this.col, this.row, targetCol, targetRow).distance > this.moves)
+	moveTo(target: Point2d): boolean {
+		const distanceToTarget = target.stepsTo(new Point2d(this.col, this.row));
+		if (distanceToTarget > this.movesLeft)
+		{
+			console.log("Refusing order");
 			return false;
-		this.target = { row: targetRow, col: targetCol };
+		}
+		this.target = { row: target.y, col: target.x };
 		this.moveStartRealTime = Date.now();
-		console.log(`Moving (${this.row},${this.col}) to (${targetRow},${targetCol})`);
+		this.movesLeft -= distanceToTarget;
+		console.log(`Moving (${this.row},${this.col}) to (${target.y},${target.x}) a distance of ${distanceToTarget}`);
 		return true;
 	}
 
@@ -29,7 +39,7 @@ class Soldier
 		{
 			if (this.moveStartGameTime == null && this.moveStartRealTime != null)
 			{
-				this.moveStartGameTime = currentTime - (Date.now() - this.moveStartRealTime);
+				this.moveStartGameTime = currentTime - 500 - (Date.now() - this.moveStartRealTime);
 				this.moveStartRealTime = null;
 			}
 
@@ -40,12 +50,12 @@ class Soldier
 				this.moveStartGameTime = null;
 				console.log(`Arrived (${this.row},${this.col})`);
 			}
-			else if (this.moveStartGameTime != null && currentTime - this.moveStartGameTime >= this.moves)
+			else if (this.moveStartGameTime != null && currentTime - this.moveStartGameTime >= 500)
 			{
 				const x = this.target.row - this.row, y = this.target.col - this.col;
 				const distance = Math.sqrt(x * x + y * y);
 				const ux = Math.round(x / distance),  uy = Math.round(y / distance);
-				console.log(`Moving (${this.row},${this.col}) by (${ux},${uy})`)
+				console.log(`${currentTime} (${currentTime - this.moveStartGameTime}) | Moving (${this.row},${this.col}) by (${ux},${uy})`)
 				this.row += ux;
 				this.col += uy;
 				this.moveStartGameTime = currentTime;
