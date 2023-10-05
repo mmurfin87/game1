@@ -8,6 +8,7 @@ export class GameState
 {
 	constructor(
 		public currentTime: number,
+		public currentTurn: number,
 		public readonly map: Tile[],
 		public readonly tileSize: number,
 		public readonly numRows: number,

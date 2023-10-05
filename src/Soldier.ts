@@ -1,4 +1,3 @@
-import { distance } from "./Util.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 
@@ -27,7 +26,6 @@ export class Soldier
 		}
 		this.target = { row: target.y, col: target.x };
 		this.moveStartRealTime = Date.now();
-		this.movesLeft -= distanceToTarget;
 		console.log(`Moving (${this.row},${this.col}) to (${target.y},${target.x}) a distance of ${distanceToTarget}`);
 		return true;
 	}

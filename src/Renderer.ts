@@ -58,7 +58,6 @@ export class Renderer
 			}
 			this.renderVictory();
 			this.lastTime = gameState.currentTime;
-			requestAnimationFrame(() => this.render(gameState));
 			return;
 		}
 
@@ -89,13 +88,14 @@ export class Renderer
 		gameState.cities.forEach(city => {
 			this.ctx.fillStyle = 'yellow';
 			this.ctx.fillRect(city.col * ts, city.row * ts, ts, ts);
-			this.drawTextCenteredOn(''+city.player.id, 12, "black", city.col*ts+ts/2, city.row*ts+ts/2);
+			this.drawTextCenteredOn(''+city.player.id, 12, "black", city.col*ts+ts/2, city.row*ts+5);
 		});
 
 		// Draw soldiers
+		const hts = ts / 2;
 		gameState.soldiers.forEach(soldier => {
 			this.ctx.fillStyle = 'black';
-			this.ctx.fillRect(soldier.col * ts, soldier.row * ts, ts, ts);
+			this.ctx.fillRect(soldier.col * ts + hts/2, soldier.row * ts + hts/2, hts, hts);
 			this.drawTextCenteredOn(''+soldier.player.id, 12, "white", soldier.col*ts+ts/2, soldier.row*ts+ts/2)
 			soldier.update(gameState.currentTime);
 		});
@@ -107,7 +107,6 @@ export class Renderer
 		this.renderFireworks();
 
 		this.lastTime = gameState.currentTime;
-		requestAnimationFrame(() => this.render(gameState));
 	}
 
 	drawTextCenteredOn(text: string, fontSize: number, color: string, x: number, y: number)
@@ -127,7 +126,7 @@ export class Renderer
 		this.ctx.arc(
 			position.col * tileSize + tileSize / 2,
 			position.row * tileSize + tileSize / 2,
-			tileSize / 2 + 2, // Adjust the radius to your liking
+			tileSize / (position.type == "City" ? 2 : 3) + 2, // Adjust the radius to your liking
 			0,
 			Math.PI * 2
 		);

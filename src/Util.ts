@@ -1,13 +1,9 @@
-export interface Distance
+export function element(tag: string, attrs?: Record<string, string>, text?: string): HTMLElement
 {
-	distance: number;
-	unitX: number;
-	unitY: number;
-}
-
-export function distance(fromX: number, fromY: number, toX: number, toY: number): Distance
-{
-	const x = toX - fromX, y = toY - fromY;
-	const distance = Math.sqrt(x * x + y * y);
-	return { distance, unitX: x/distance, unitY: y/distance };
+	const e = document.createElement(tag);
+	if (attrs)
+		Object.keys(attrs).forEach(k => e.setAttribute(k, attrs[k]));
+	if (text)
+		e.appendChild(document.createTextNode(text));
+	return e;
 }

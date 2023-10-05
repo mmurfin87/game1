@@ -6,7 +6,7 @@ import { Positioned } from "./Positioned.js";
 import { Renderer } from "./Renderer.js";
 import { Soldier } from "./Soldier.js";
 import { Tile, Terrain } from "./Tile.js";
-import { Action } from "./actions/Action.js";
+import { Action, ActionContinuation, ActionExecutionParameter, ActionExecutionState } from "./actions/Action.js";
 import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
@@ -16,6 +16,7 @@ const gameState: GameState = (() => {
 	const barbarianPlayer = new Player(0);
 	const humanPlayer = new Player(1);
 	return new GameState(
+		0,
 		0,
 		new Array(numRows * numCols).fill(null),
 		500/numRows,
@@ -41,15 +42,28 @@ const renderer: Renderer = (() => {
 	);
 })();
 
+let lastTurn = -1;
+function gameLoop()
+{
+	if (lastTurn < gameState.currentTurn)
+	{	
+		lastTurn = gameState.currentTurn;
+		aiThink();
+	}
+
+	renderer.render(gameState);
+	requestAnimationFrame(gameLoop);
+}
+
 const instawin = element("button", { "type": "button" }, "Insta-Win");
 instawin.addEventListener("click", () => gameState.cities.forEach(city => city.player = gameState.humanPlayer));
-(document.getElementById("actions") as HTMLElement).appendChild(instawin);
+(document.getElementById("actions") as HTMLElement).insertBefore(instawin, document.getElementById("unit-actions") as HTMLElement);//appendChild(instawin);
 
 // Call the function to generate random cities
 gameState.generateRandomCities();
 
 // Start the game loop
-requestAnimationFrame(() => renderer.render(gameState));
+requestAnimationFrame(gameLoop);
 
 // Handle right-click events to move soldiers
 renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
@@ -82,6 +96,7 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 				{
 					console.log(`Target (${target.y},${target.x}) distance ${distanceToTarget} in range ${soldier.movesLeft}`);
 					soldier.moveTo(target);
+					soldier.movesLeft -= distanceToTarget;
 				}
 			}
 			else
@@ -90,21 +105,32 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 		}
 	}
 
-	calculateActions();
+	resolvePlayerActions();
 });
 
 // Handle click events to create soldiers and select soldiers
+type MouseEventHandler = (arg: ActionExecutionParameter[ActionExecutionState.NEED_GRID_COORDS]) => void;
+let captureCoordsForAction: MouseEventHandler | null = null;
 renderer.canvas.addEventListener('click', (e: MouseEvent) => {
+	if (captureCoordsForAction != null)
+	{
+		const coords = new Point2d(e.offsetX, e.offsetY).stepScale(gameState.tileSize);
+		console.log(`Captured Coordinates for Action: (${e.offsetX},${e.offsetY}) => (${coords.x},${coords.y})`);
+		captureCoordsForAction(coords);
+		captureCoordsForAction = null;
+		return;
+	}
 	gameState.selection = gameState.select(e.offsetX, e.offsetY, gameState.humanPlayer);
 	if (gameState.selection)
-		calculateActions();
+		resolvePlayerActions();
 });
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
 	console.log('Next Turn');
+	gameState.currentTurn += 1;
 	gameState.soldiers.forEach(s => s.movesLeft = s.moves);
 	gameState.cities.forEach(s => s.movesLeft = s.moves);
-	calculateActions();
+	resolvePlayerActions();
 });
 
 function element(tag: string, attrs?: Record<string, string>, text?: string): HTMLElement
@@ -117,7 +143,27 @@ function element(tag: string, attrs?: Record<string, string>, text?: string): HT
 	return e;
 }
 
-function calculateActions()
+function calculateActions(player: Player, selection: Positioned): Action[]
+{
+	let actions: Action[] = [];
+	switch (selection.type)
+	{
+		case "City":
+			actions = [
+				new BuildSoldierAction(player, selection, gameState.soldiers)
+			];
+			break;
+		case "Soldier":
+			actions = [
+				new TargetMoveAction(selection),
+				new SettleAction(player, selection, gameState.search.bind(gameState))
+			]
+			break;
+	}
+	return actions;
+}
+
+function resolvePlayerActions()
 {
 	while (renderer.unitActions.hasChildNodes())
 			renderer.unitActions.removeChild(renderer.unitActions.lastChild as Node);
@@ -125,21 +171,7 @@ function calculateActions()
 	if (gameState.selection == null)
 		return;
 
-	let actions: Action[] = [];
-	switch (gameState.selection.type)
-	{
-		case "City":
-			actions = [
-				new BuildSoldierAction(gameState.humanPlayer, gameState.selection, gameState.soldiers)
-			];
-			break;
-		case "Soldier":
-			actions = [
-				new TargetMoveAction(gameState.selection),
-				new SettleAction(gameState.humanPlayer, gameState.selection, gameState.search.bind(gameState))
-			]
-			break;
-	}
+	const actions: Action[] = calculateActions(gameState.humanPlayer, gameState.selection);
 
 	for (const action of actions)
 	{
@@ -149,12 +181,104 @@ function calculateActions()
 		const actionButton = element("button", { "type": "button" }, action.name());
 		const target = gameState.selection;
 		actionButton.addEventListener("click", () => {
-			action.execute()
-			target.movesLeft -= cost;
-			console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${target.type} with ${target.movesLeft} move${target.movesLeft == 1 ? '' : 's'} left`);
-			gameState.selection = null;
-			calculateActions();
+			const result: ActionContinuation = action.execute();
+			switch (result.executionState)
+			{
+				case ActionExecutionState.COMPLETE:
+					target.movesLeft -= cost;
+					console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${target.type} with ${target.movesLeft} move${target.movesLeft == 1 ? '' : 's'} left`);
+					gameState.selection = null;
+					break;
+				case ActionExecutionState.NEED_GRID_COORDS:
+					captureCoordsForAction = (arg) => { 
+						(result.parameterHandler as (arg: Point2d) => void)(arg); 
+						target.movesLeft -= cost;
+						console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${target.type} with ${target.movesLeft} move${target.movesLeft == 1 ? '' : 's'} left`);
+						gameState.selection = null;
+						resolvePlayerActions();
+					};
+					break;
+			}
+			
+			resolvePlayerActions();
 		});
 		renderer.unitActions.appendChild(actionButton);
+	}
+}
+
+function findNearestEnemyTarget(player: Player, origin: Point2d, exclude: Positioned[]): Positioned | null
+{
+	let nearest: Positioned | null = null, dist: number = 0;
+	for (const pos of [...gameState.soldiers, ...gameState.cities])
+	{
+		if (pos.player == player || exclude.includes(pos))
+			continue;
+		const stepsTo = origin.stepsTo(new Point2d(pos.col, pos.row));
+		if (nearest == null || stepsTo < dist)
+		{
+			nearest = pos;
+			dist = stepsTo;
+		}
+	}
+	return nearest;
+}
+
+function aiThink()
+{
+	for (const player of gameState.players)
+	{
+		if (player == gameState.barbarianPlayer || player == gameState.humanPlayer)
+			continue;
+		
+		let soldierCount = 0;
+		const targets: Positioned[] = [];
+		for (const pos of [...gameState.soldiers, ...gameState.cities])
+		{
+			if (pos.player != player)
+				continue;
+			if (pos.type == 'Soldier')
+				soldierCount++;
+			
+			const actions: Action[] = calculateActions(player, pos);
+			
+			// Rank the actions
+			actions
+				.filter(a => a.name() != "Train Soldier" || soldierCount < 3)
+				.sort((a,b) => a.name() == "Move" ? 1 : 0)
+			;
+
+			for (const action of actions)
+			{
+				const cost = action.prepare();
+				if (cost < 0 || cost > pos.movesLeft)
+					continue;
+				
+				const result: ActionContinuation = action.execute();
+				switch (result.executionState)
+				{
+					case ActionExecutionState.COMPLETE:
+						pos.movesLeft -= cost;
+						console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${pos.type} with ${pos.movesLeft} move${pos.movesLeft == 1 ? '' : 's'} left`);
+						break;
+					case ActionExecutionState.NEED_GRID_COORDS:
+						let origin: Point2d = new Point2d(pos.col, pos.row);
+						const nearestTarget = findNearestEnemyTarget(player, origin, targets);
+						if (nearestTarget == null)
+						{
+							console.log(`Identified nearest enemy target: null`);
+							continue;
+						}
+						console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
+						let vx = nearestTarget.col - origin.x, vy = nearestTarget.row - origin.y;
+						vx = vx > 0 ? 1 : vx < 0 ? -1 : 0;
+						vy = vy > 0 ? 1 : vy < 0 ? -1 : 0;
+						result.parameterHandler(new Point2d(origin.x + vx, origin.y + vy));
+						targets.push(nearestTarget);
+						pos.movesLeft -= cost;
+						console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${pos.type} with ${pos.movesLeft} move${pos.movesLeft == 1 ? '' : 's'} left`);
+						break;
+				}
+			}
+		}
 	}
 }

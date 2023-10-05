@@ -1,7 +1,7 @@
 import { City } from "../City.js";
 import { Player } from "../Player.js";
 import { Soldier } from "../Soldier.js";
-import { Action } from "./Action.js";
+import { Action, ActionContinuation } from "./Action.js";
 
 export class BuildSoldierAction implements Action
 {
@@ -18,8 +18,9 @@ export class BuildSoldierAction implements Action
         return 1;
     }
 
-    execute(): void
+    execute(): ActionContinuation
     {
         this.soldiers.push(new Soldier(this.selection.row, this.selection.col, this.humanPlayer, 1));
+        return ActionContinuation.complete();
     }
 }
