@@ -1,31 +1,59 @@
-import { InputHandler } from "../InputMode";
-import { Point2d } from "../Point2d";
-import { Positioned } from "../Positioned";
-
-export enum ActionExecutionState { COMPLETE, NEED_GRID_COORDS };
-
-export type ActionExecutionParameter = {
-    [ActionExecutionState.COMPLETE]: void,
-    [ActionExecutionState.NEED_GRID_COORDS]: Point2d
-};
-
-export class ActionContinuation
-{
-    static complete(): ActionContinuation
-    {
-        return new ActionContinuation(ActionExecutionState.COMPLETE, () =>{});
-    }
-
-    constructor(
-        public readonly executionState: ActionExecutionState,
-        public readonly parameterHandler: (arg: ActionExecutionParameter[typeof executionState]) => void
-    )
-    {}
-}
-
-export interface Action
+export interface Action<T>
 {
     name(): string;
-    prepare(): number;
-    execute(): ActionContinuation;
+    recipe(): (keyof T)[];
+    prepare(data: T): void;
+    execute(): void;
+}
+
+export abstract class PreparedAction implements Action<{}>
+{
+    constructor(private readonly actionName: string) {}
+    
+    name(): string
+    {
+        return this.actionName;
+    }
+
+    recipe(): (keyof {})[]
+    {
+        return [];
+    }
+
+    prepare(data: {}): void
+    {
+        
+    }
+
+    abstract execute(): void;
+}
+
+export abstract class AbstractAction<T extends Object> implements Action<T>
+{
+    protected data: T;
+
+    constructor(
+        private readonly actionName: string,
+        private readonly nullObject: T
+    )
+    {
+        this.data = nullObject;
+    }
+    
+    name(): string
+    {
+        return this.actionName;
+    }
+
+    recipe(): (keyof T)[]
+    {
+        return Object.keys(this.nullObject) as (keyof T)[];
+    }
+
+    prepare(data: T): void
+    {
+        this.data = data;
+    }
+
+    abstract execute(): void;
 }

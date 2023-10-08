@@ -194,7 +194,7 @@ function createFirework(x: number, y: number)
 	const particleCount = 100;
 	const color = `hsl(${getRandomInRange(0, 360)}, 100%, 50%)`;
 
-	for (let i = 0; i < particleCount; i++)
+	for (let i = 0; i < particleCount && fireworks.length < 500; i++)
 	{
 		const angle = (Math.PI * 2) * (i / particleCount);
 		const radius = getRandomInRange(2, 6);

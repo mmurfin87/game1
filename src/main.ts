@@ -6,7 +6,7 @@ import { Positioned } from "./Positioned.js";
 import { Renderer } from "./Renderer.js";
 import { Soldier } from "./Soldier.js";
 import { Tile, Terrain } from "./Tile.js";
-import { Action, ActionContinuation, ActionExecutionParameter, ActionExecutionState } from "./actions/Action.js";
+import { Action } from "./actions/Action.js";
 import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
@@ -143,9 +143,9 @@ function element(tag: string, attrs?: Record<string, string>, text?: string): HT
 	return e;
 }
 
-function calculateActions(player: Player, selection: Positioned): Action[]
+function calculateActions(player: Player, selection: Positioned): Action<any>[]
 {
-	let actions: Action[] = [];
+	let actions: Action<any>[] = [];
 	switch (selection.type)
 	{
 		case "City":
@@ -171,7 +171,7 @@ function resolvePlayerActions()
 	if (gameState.selection == null)
 		return;
 
-	const actions: Action[] = calculateActions(gameState.humanPlayer, gameState.selection);
+	const actions: Action<any>[] = calculateActions(gameState.humanPlayer, gameState.selection);
 
 	for (const action of actions)
 	{
@@ -181,7 +181,15 @@ function resolvePlayerActions()
 		const actionButton = element("button", { "type": "button" }, action.name());
 		const target = gameState.selection;
 		actionButton.addEventListener("click", () => {
-			const result: ActionContinuation = action.execute();
+			switch (action.name())
+			{
+				case "Move":
+
+					break;
+				default:
+					(action as Action<undefined>).execute();
+			}
+			action.execute();
 			switch (result.executionState)
 			{
 				case ActionExecutionState.COMPLETE:
@@ -239,11 +247,13 @@ function aiThink()
 			if (pos.type == 'Soldier')
 				soldierCount++;
 			
-			const actions: Action[] = calculateActions(player, pos);
-			
-			// Rank the actions
-			actions
-				.filter(a => a.name() != "Train Soldier" || soldierCount < 3)
+			const actions: Action[] = calculateActions(player, pos)
+				// Rank the actions
+				.filter(a => {
+					if (a.name() == "Train Soldier")
+						console.log(`Soldier Count for player ${player.id}: ${soldierCount}`);
+					return a.name() != "Train Soldier" || soldierCount < 3
+				})
 				.sort((a,b) => a.name() == "Move" ? 1 : 0)
 			;
 

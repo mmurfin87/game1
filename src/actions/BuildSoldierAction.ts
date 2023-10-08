@@ -1,26 +1,19 @@
 import { City } from "../City.js";
 import { Player } from "../Player.js";
 import { Soldier } from "../Soldier.js";
-import { Action, ActionContinuation } from "./Action.js";
+import { PreparedAction } from "./Action.js";
 
-export class BuildSoldierAction implements Action
+export class BuildSoldierAction extends PreparedAction
 {
-    constructor(private humanPlayer: Player, private selection: City, private soldiers: Soldier[])
-    {}
-
-    name(): string
-    {
-        return "Train Soldier";
-    }
-    
-    prepare(): number
-    {
-        return 1;
-    }
-
-    execute(): ActionContinuation
-    {
-        this.soldiers.push(new Soldier(this.selection.row, this.selection.col, this.humanPlayer, 1));
-        return ActionContinuation.complete();
-    }
+	constructor(private player: Player, private selection: City, private soldiers: Soldier[])
+	{
+		super("Train Soldier");
+	}
+	
+	execute(): void
+	{
+		//if (this.soldiers.find(s => s.col == this.selection.col && s.row == this.selection.row && s.player != this.player))
+		//    throw new Error("Can't build soldiers in cities that aren't yours");
+		this.soldiers.push(new Soldier(this.selection.row, this.selection.col, this.player, 1));
+	}
 }
