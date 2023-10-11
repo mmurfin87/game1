@@ -6,7 +6,8 @@ import { Positioned } from "./Positioned.js";
 import { Renderer } from "./Renderer.js";
 import { Soldier } from "./Soldier.js";
 import { Tile, Terrain } from "./Tile.js";
-import { Action, ActionContinuation, ActionExecutionParameter, ActionExecutionState } from "./actions/Action.js";
+import { Action } from "./actions/Action.js";
+import { AttackSoldierAction } from "./actions/AttackSoldierAction.js";
 import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
@@ -109,15 +110,15 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 });
 
 // Handle click events to create soldiers and select soldiers
-type MouseEventHandler = (arg: ActionExecutionParameter[ActionExecutionState.NEED_GRID_COORDS]) => void;
-let captureCoordsForAction: MouseEventHandler | null = null;
+let moveAction: ((coords: Point2d) => Action) | null = null;
 renderer.canvas.addEventListener('click', (e: MouseEvent) => {
-	if (captureCoordsForAction != null)
+	if (moveAction)
 	{
 		const coords = new Point2d(e.offsetX, e.offsetY).stepScale(gameState.tileSize);
 		console.log(`Captured Coordinates for Action: (${e.offsetX},${e.offsetY}) => (${coords.x},${coords.y})`);
-		captureCoordsForAction(coords);
-		captureCoordsForAction = null;
+		moveAction(coords).execute();
+		moveAction = null;
+		console.log(`moveAction cleared: ${moveAction}`);
 		return;
 	}
 	gameState.selection = gameState.select(e.offsetX, e.offsetY, gameState.humanPlayer);
@@ -143,21 +144,43 @@ function element(tag: string, attrs?: Record<string, string>, text?: string): HT
 	return e;
 }
 
-function calculateActions(player: Player, selection: Positioned): Action[]
+class ActionOption
 {
-	let actions: Action[] = [];
+	constructor(
+		public readonly name: string,
+		public readonly execute: () => void
+	)
+	{}
+}
+
+function calculateActions(player: Player, selection: Positioned): ActionOption[]
+{
+	const actions: ActionOption[] = [];
 	switch (selection.type)
 	{
 		case "City":
-			actions = [
-				new BuildSoldierAction(player, selection, gameState.soldiers)
-			];
+			if (selection.movesLeft > 0)
+				actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(player, selection, gameState.soldiers).execute()));
 			break;
 		case "Soldier":
-			actions = [
-				new TargetMoveAction(selection),
-				new SettleAction(player, selection, gameState.search.bind(gameState))
-			]
+			if (selection.movesLeft > 0)
+			{
+				actions.push(new ActionOption("Move", () => { moveAction = (p: Point2d) => new TargetMoveAction(selection, p); }));
+				const settlement: City | undefined = gameState.search(selection.row, selection.col).find(pos => pos.type == "City" && pos.player != player) as City | undefined;
+				if (settlement)
+					actions.push(new ActionOption("Settle", () => new SettleAction(player, selection, settlement).execute()));
+				const enemiesInRange = findEnemiesInRange(player, selection.position(), 1).filter(e => e.type == "Soldier");
+				if (enemiesInRange.length > 0)
+					actions.push(new ActionOption("Attack", () => { 
+						moveAction = (p: Point2d) => {
+							const target = enemiesInRange.find(pos => pos.col == p.x && pos.row == p.y);
+							if (target && target.type == "Soldier")
+								return new AttackSoldierAction(selection, target);
+							else
+								throw new Error("Invalid attack target");
+						};
+					}));
+			}
 			break;
 	}
 	return actions;
@@ -171,35 +194,14 @@ function resolvePlayerActions()
 	if (gameState.selection == null)
 		return;
 
-	const actions: Action[] = calculateActions(gameState.humanPlayer, gameState.selection);
+	const actions: ActionOption[] = calculateActions(gameState.humanPlayer, gameState.selection);
 
 	for (const action of actions)
 	{
-		const cost = action.prepare();
-		if (cost < 0 || cost > gameState.selection.movesLeft)
-			continue;
-		const actionButton = element("button", { "type": "button" }, action.name());
+		const actionButton = element("button", { "type": "button" }, action.name);
 		const target = gameState.selection;
 		actionButton.addEventListener("click", () => {
-			const result: ActionContinuation = action.execute();
-			switch (result.executionState)
-			{
-				case ActionExecutionState.COMPLETE:
-					target.movesLeft -= cost;
-					console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${target.type} with ${target.movesLeft} move${target.movesLeft == 1 ? '' : 's'} left`);
-					gameState.selection = null;
-					break;
-				case ActionExecutionState.NEED_GRID_COORDS:
-					captureCoordsForAction = (arg) => { 
-						(result.parameterHandler as (arg: Point2d) => void)(arg); 
-						target.movesLeft -= cost;
-						console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${target.type} with ${target.movesLeft} move${target.movesLeft == 1 ? '' : 's'} left`);
-						gameState.selection = null;
-						resolvePlayerActions();
-					};
-					break;
-			}
-			
+			action.execute();			
 			resolvePlayerActions();
 		});
 		renderer.unitActions.appendChild(actionButton);
@@ -223,6 +225,15 @@ function findNearestEnemyTarget(player: Player, origin: Point2d, exclude: Positi
 	return nearest;
 }
 
+function findEnemiesInRange(player: Player, origin: Point2d, range: number): Positioned[]
+{
+	const result: Positioned[] = [];
+	for (const pos of [...gameState.soldiers, ...gameState.cities])
+		if (pos.player != player && origin.stepsTo(pos.position()) <= range)
+			result.push(pos);
+	return result;
+}
+
 function aiThink()
 {
 	for (const player of gameState.players)
@@ -239,45 +250,36 @@ function aiThink()
 			if (pos.type == 'Soldier')
 				soldierCount++;
 			
-			const actions: Action[] = calculateActions(player, pos);
-			
-			// Rank the actions
-			actions
-				.filter(a => a.name() != "Train Soldier" || soldierCount < 3)
-				.sort((a,b) => a.name() == "Move" ? 1 : 0)
+			const actions: ActionOption[] = calculateActions(player, pos)
+				.filter(a => a.name != "Train Soldier" || soldierCount < 3)
+				.sort((a,b) => a.name == "Move" ? -1 : 0)
 			;
 
 			for (const action of actions)
 			{
-				const cost = action.prepare();
-				if (cost < 0 || cost > pos.movesLeft)
-					continue;
-				
-				const result: ActionContinuation = action.execute();
-				switch (result.executionState)
+				console.log(`AI Executing ${action.name}`);
+				action.execute();
+				if (action.name == "Move" && moveAction)
 				{
-					case ActionExecutionState.COMPLETE:
-						pos.movesLeft -= cost;
-						console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${pos.type} with ${pos.movesLeft} move${pos.movesLeft == 1 ? '' : 's'} left`);
-						break;
-					case ActionExecutionState.NEED_GRID_COORDS:
-						let origin: Point2d = new Point2d(pos.col, pos.row);
-						const nearestTarget = findNearestEnemyTarget(player, origin, targets);
-						if (nearestTarget == null)
-						{
-							console.log(`Identified nearest enemy target: null`);
-							continue;
-						}
-						console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
-						let vx = nearestTarget.col - origin.x, vy = nearestTarget.row - origin.y;
-						vx = vx > 0 ? 1 : vx < 0 ? -1 : 0;
-						vy = vy > 0 ? 1 : vy < 0 ? -1 : 0;
-						result.parameterHandler(new Point2d(origin.x + vx, origin.y + vy));
-						targets.push(nearestTarget);
-						pos.movesLeft -= cost;
-						console.log(`Executed ${action.name()} costing ${cost} move${cost == 1 ? '' : 's'} leaving ${pos.type} with ${pos.movesLeft} move${pos.movesLeft == 1 ? '' : 's'} left`);
-						break;
+					let origin: Point2d = new Point2d(pos.col, pos.row);
+					const nearestTarget = findNearestEnemyTarget(player, origin, targets);
+					if (nearestTarget == null)
+					{
+						console.log(`Identified nearest enemy target: null`);
+						continue;
+					}
+					console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
+					let vx = nearestTarget.col - origin.x, vy = nearestTarget.row - origin.y;
+					vx = vx > 0 ? 1 : vx < 0 ? -1 : 0;
+					vy = vy > 0 ? 1 : vy < 0 ? -1 : 0;
+					if (vx == 0 && vy == 0)
+						continue;
+					targets.push(nearestTarget);
+					moveAction(new Point2d(origin.x + vx, origin.y + vy)).execute();
+					moveAction = null;
+					console.log(`moveAction cleared: ${moveAction}`);
 				}
+				break;
 			}
 		}
 	}

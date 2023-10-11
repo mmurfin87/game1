@@ -22,9 +22,14 @@ export class GameState
 	)
 	{}
 
-	checkVictory(): boolean
+	checkVictoryStatus(): boolean | undefined
 	{
-		return this.cities.find(city => city.player != this.humanPlayer) === undefined;
+		let playerCities = 0;
+		for (const city of this.cities)
+			if (city.player == this.humanPlayer)
+				playerCities++;
+		return playerCities == this.cities.length ? true : playerCities == 0 ? false : undefined;
+
 	}
 
 	// Function to generate random cities

@@ -1,4 +1,5 @@
 import { Player } from "./Player.js";
+import { Point2d } from "./Point2d.js";
 
 export class City
 {
@@ -12,4 +13,9 @@ export class City
 		public movesLeft: number = moves) 
 	{
     }
+
+	position(): Point2d
+	{
+		return new Point2d(this.col, this.row);
+	}
 }

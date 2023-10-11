@@ -27,6 +27,14 @@ export class Renderer
 		this.renderFireworks();
 	}
 
+	private renderDefeat(): void
+	{
+		this.ctx.putImageData(this.finalRenderImage as ImageData, 0, 0);
+
+		// Draw victory text
+		this.drawTextCenteredOn("Defeat", 48, 'black', this.canvas.width / 2, this.canvas.height / 2);
+	}
+
 	private renderFireworks(): void
 	{
 		let spliceAfter = fireworks.length;
@@ -46,17 +54,23 @@ export class Renderer
 
 	render(gameState: GameState): void
 	{
-		if (this.finalRenderImage != null || gameState.checkVictory())
+		const victory = gameState.checkVictoryStatus();
+		if (this.finalRenderImage != null || victory != undefined)
 		{
 			if (this.finalRenderImage == null)
 			{
 				this.finalRenderImage = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
-				setInterval(() => {
-					createRandomFirework(this.canvas.width, this.canvas.height);
-				  }, 250); // Adjust the interval as needed
+				if (victory)
+					setInterval(() => 
+					{
+						createRandomFirework(this.canvas.width, this.canvas.height);
+					}, 250); // Adjust the interval as needed
 				  
 			}
-			this.renderVictory();
+			if (victory)
+				this.renderVictory();
+			else
+				this.renderDefeat();
 			this.lastTime = gameState.currentTime;
 			return;
 		}

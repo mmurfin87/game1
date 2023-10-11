@@ -13,8 +13,14 @@ export class Soldier
 		public col: number, 
 		public player: Player,
 		public moves: number,
+		public health: number,
 		public movesLeft: number = moves)
 	{
+	}
+
+	position(): Point2d
+	{
+		return new Point2d(this.col, this.row);
 	}
 
 	moveTo(target: Point2d): boolean {

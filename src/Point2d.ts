@@ -1,5 +1,10 @@
 export class Point2d
 {
+    public static origin(): Point2d
+    {
+        return new Point2d(0, 0);
+    }
+
     constructor(
         public x: number,
         public y: number
