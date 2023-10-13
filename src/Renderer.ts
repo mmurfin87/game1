@@ -149,12 +149,19 @@ export class Renderer
 		gameState.soldiers.forEach(soldier => {
 			if (soldier.path == null)
 				return;
+			let last = null;
 			for (const p of soldier.path)
 			{
 				this.ctx.beginPath();
 				this.ctx.arc(p.x * ts + hts, p.y * ts + hts, 5, 0, Math.PI * 2);
 				this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
 				this.ctx.fill();
+				if (last != null)
+				{
+					this.ctx.moveTo(last.x * ts + hts, last.y * ts + hts);
+					this.ctx.lineTo(p.x * ts + hts, p.y * ts + hts)
+				}
+				last = p;
 			}
 		});
 
