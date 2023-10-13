@@ -158,8 +158,12 @@ export class Renderer
 				this.ctx.fill();
 				if (last != null)
 				{
+					this.ctx.beginPath();
+					this.ctx.lineWidth = 1;
+					this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
 					this.ctx.moveTo(last.x * ts + hts, last.y * ts + hts);
 					this.ctx.lineTo(p.x * ts + hts, p.y * ts + hts)
+					this.ctx.stroke();
 				}
 				last = p;
 			}

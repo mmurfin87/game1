@@ -172,8 +172,11 @@ function calculateActions(player: Player, selection: Positioned): ActionOption[]
 	switch (selection.type)
 	{
 		case "City":
-			if (selection.movesLeft > 0)
+		{
+			const nearestEnemy = findNearestEnemyTarget(selection.player, selection.position(), []);
+			if (selection.movesLeft > 0 && (nearestEnemy == null || nearestEnemy.position().stepsTo(selection.position()) > 0))
 				actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(player, selection, gameState.soldiers).execute()));
+		}
 			break;
 		case "Soldier":
 			if (selection.movesLeft > 0)
@@ -285,7 +288,7 @@ function aiThink()
 				soldierCount++;
 			
 			const actions: ActionOption[] = calculateActions(player, pos)
-				.filter(a => a.name != "Train Soldier" || soldierCount < 1)
+				.filter(a => a.name != "Train Soldier" || soldierCount < 3)
 				.sort((a,b) => a.name == "Attack" ? -1 : b.name == "Attack" ? 1 : a.name == "Move" ? -1 : b.name == "Move" ? 1 : 0)
 			;
 
