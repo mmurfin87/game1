@@ -4,6 +4,7 @@ import { Point2d } from "./Point2d.js";
 export class Soldier
 {
 	public readonly type = "Soldier";
+	public path: Point2d[] | null = null;
 	private target: {row: number, col: number} | null = null;
 	private moveStartRealTime: number | null = null;
 	private moveStartGameTime: number | null = null;

@@ -5,6 +5,14 @@ export class Point2d
         return new Point2d(0, 0);
     }
 
+    public static equivalent(...points: Point2d[]): boolean
+    {
+        if (points.length < 2)
+            return true;
+        const x = points[0].x, y = points[0].y;
+        return points.every(p => p.x == x && p.y == y);
+    }
+
     constructor(
         public x: number,
         public y: number
@@ -44,7 +52,7 @@ export class Point2d
     }
 
     stepScale(stepSize: number): Point2d
-    {
+    {console.log(`${this.x} / ${stepSize} = ${Math.floor(this.x/stepSize)} | ${this.y} / ${stepSize} = ${Math.floor(this.y/stepSize)}`);
         this.x = Math.floor(this.x / stepSize);
         this.y = Math.floor(this.y / stepSize);
         return this;
@@ -61,5 +69,10 @@ export class Point2d
             stepCount++;
         }
         return stepCount;
+    }
+
+    toString(): string
+    {
+        return `(${this.x},${this.y})`;
     }
 }

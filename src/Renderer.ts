@@ -54,11 +54,12 @@ export class Renderer
 
 	render(gameState: GameState): void
 	{
-		const victory = gameState.checkVictoryStatus();
-		if (this.finalRenderImage != null || victory != undefined)
+		if (gameState.gameover)
 		{
+			const victory = gameState.checkWinner() == gameState.humanPlayer;
 			if (this.finalRenderImage == null)
 			{
+				this.renderBoard(gameState);
 				this.finalRenderImage = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
 				if (victory)
 					setInterval(() => 
@@ -75,7 +76,38 @@ export class Renderer
 			return;
 		}
 
-		const deltaTime = gameState.currentTime - this.lastTime;
+		this.renderBoard(gameState);
+		
+
+		this.lastTime = gameState.currentTime;
+	}
+
+	drawTextCenteredOn(text: string, fontSize: number, color: string, x: number, y: number)
+	{
+		this.ctx.fillStyle = color;
+		this.ctx.font = fontSize + 'px Arial';
+		const width = this.ctx.measureText(text).width;
+		this.ctx.fillText(text, x-(width/2), y+fontSize/2);
+	}
+
+	// Function to draw the red circle around the selected city
+	drawSelection(position: Positioned, tileSize: number)
+	{
+		this.ctx.strokeStyle = 'red';
+		this.ctx.lineWidth = 2;
+		this.ctx.beginPath();
+		this.ctx.arc(
+			position.col * tileSize + tileSize / 2,
+			position.row * tileSize + tileSize / 2,
+			tileSize / (position.type == "City" ? 2 : 3) + 2, // Adjust the radius to your liking
+			0,
+			Math.PI * 2
+		);
+		this.ctx.stroke();
+	}
+
+	renderBoard(gameState: GameState)
+	{
 		const ts = gameState.tileSize;
 
 		// Clear canvas
@@ -114,39 +146,23 @@ export class Renderer
 			soldier.update(gameState.currentTime);
 		});
 
+		gameState.soldiers.forEach(soldier => {
+			if (soldier.path == null)
+				return;
+			for (const p of soldier.path)
+			{
+				this.ctx.beginPath();
+				this.ctx.arc(p.x * ts + hts, p.y * ts + hts, 5, 0, Math.PI * 2);
+				this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+				this.ctx.fill();
+			}
+		});
+
 		if (gameState.selection)
 			this.drawSelection(gameState.selection, ts);
-
-		//test code
-		this.renderFireworks();
-
-		this.lastTime = gameState.currentTime;
-	}
-
-	drawTextCenteredOn(text: string, fontSize: number, color: string, x: number, y: number)
-	{
-		this.ctx.fillStyle = color;
-		this.ctx.font = fontSize + 'px Arial';
-		const width = this.ctx.measureText(text).width;
-		this.ctx.fillText(text, x-(width/2), y+fontSize/2);
-	}
-
-	// Function to draw the red circle around the selected city
-	drawSelection(position: Positioned, tileSize: number)
-	{
-		this.ctx.strokeStyle = 'red';
-		this.ctx.lineWidth = 2;
-		this.ctx.beginPath();
-		this.ctx.arc(
-			position.col * tileSize + tileSize / 2,
-			position.row * tileSize + tileSize / 2,
-			tileSize / (position.type == "City" ? 2 : 3) + 2, // Adjust the radius to your liking
-			0,
-			Math.PI * 2
-		);
-		this.ctx.stroke();
 	}
 }
+
 
 
 
@@ -208,7 +224,7 @@ function createFirework(x: number, y: number)
 	const particleCount = 100;
 	const color = `hsl(${getRandomInRange(0, 360)}, 100%, 50%)`;
 
-	for (let i = 0; i < particleCount; i++)
+	for (let i = 0; i < particleCount && fireworks.length < 500; i++)
 	{
 		const angle = (Math.PI * 2) * (i / particleCount);
 		const radius = getRandomInRange(2, 6);

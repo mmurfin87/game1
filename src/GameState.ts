@@ -1,11 +1,14 @@
 import { City } from "./City.js";
 import { Player } from "./Player.js";
+import { Point2d } from "./Point2d.js";
 import { Positioned } from "./Positioned.js";
 import { Soldier } from "./Soldier.js";
 import { Tile, Terrain } from "./Tile.js";
 
 export class GameState
 {
+	public gameover: boolean = false;
+
 	constructor(
 		public currentTime: number,
 		public currentTurn: number,
@@ -22,14 +25,26 @@ export class GameState
 	)
 	{}
 
-	checkVictoryStatus(): boolean | undefined
+	checkWinner(): Player | null
 	{
-		let playerCities = 0;
-		for (const city of this.cities)
-			if (city.player == this.humanPlayer)
-				playerCities++;
-		return playerCities == this.cities.length ? true : playerCities == 0 ? false : undefined;
+		const winner = this.cities.find(city => city.player != this.barbarianPlayer)?.player ?? null;
+		if (this.cities.some(city => city.player != winner && city.player != this.barbarianPlayer))
+			return null;
+		return winner;
+	}
 
+
+	cleanupDefeatedPlayers()
+	{
+		const playersAlive = this.cities.reduce<Player[]>((r, c) => {
+				if (!r.includes(c.player))
+					r.push(c.player);
+				return r;
+			}, 
+			[]);
+		for (let i = 0; i < this.soldiers.length; i++)
+			if (!playersAlive.includes(this.soldiers[i].player))
+				this.soldiers.splice(i, 1);
 	}
 
 	// Function to generate random cities
@@ -53,11 +68,17 @@ export class GameState
 
 				if (Math.random() < 0.1) {
 					this.map[row * this.numRows + col].terrain = Terrain.GRASSLAND;	// make sure city is on a traversible ground
-					this.cities.push(new City(row, col, this.barbarianPlayer, 1));
+					//this.cities.push(new City(row, col, this.barbarianPlayer, 1));
 				}
 			}
 		}
+		this.map[0 * this.numRows + 0].terrain = Terrain.GRASSLAND
+		this.map[0 * this.numRows + this.numCols-1].terrain = Terrain.GRASSLAND
+		this.map[this.numRows + this.numCols-1].terrain = Terrain.GRASSLAND
 
+		this.cities.push(new City(0, 0, this.barbarianPlayer, 1));
+		this.cities.push(new City(0, this.numCols-1, this.barbarianPlayer, 1));
+		this.cities.push(new City(this.numRows-1, this.numCols-1, this.barbarianPlayer, 1));
 		this.cities[0].player = this.humanPlayer;
 		this.cities[this.cities.length-1].player = this.players[this.players.length-1];
 	}
@@ -95,5 +116,15 @@ export class GameState
 				if (row == pos.row && col == pos.col)
 					result.push(pos);
 		return result;
+	}
+
+	tileAtPoint(coords: Point2d): Tile
+	{
+		return this.tileAtCoords(coords.x, coords.y);
+	}
+
+	public tileAtCoords(x: number, y: number): Tile
+	{
+		return this.map[y * this.numRows + x];
 	}
 }

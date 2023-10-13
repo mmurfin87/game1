@@ -1,3 +1,4 @@
+import { aStar } from "./AStar.js";
 import { City } from "./City.js";
 import { GameState } from "./GameState.js";
 import { Player } from "./Player.js";
@@ -13,7 +14,7 @@ import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
 
 const gameState: GameState = (() => {
-	const numRows = 10, numCols = 10;
+	const numRows = 5, numCols = 5;
 	const barbarianPlayer = new Player(0);
 	const humanPlayer = new Player(1);
 	return new GameState(
@@ -43,15 +44,8 @@ const renderer: Renderer = (() => {
 	);
 })();
 
-let lastTurn = -1;
 function gameLoop()
 {
-	if (lastTurn < gameState.currentTurn)
-	{	
-		lastTurn = gameState.currentTurn;
-		aiThink();
-	}
-
 	renderer.render(gameState);
 	requestAnimationFrame(gameLoop);
 }
@@ -116,18 +110,37 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 	{
 		const coords = new Point2d(e.offsetX, e.offsetY).stepScale(gameState.tileSize);
 		console.log(`Captured Coordinates for Action: (${e.offsetX},${e.offsetY}) => (${coords.x},${coords.y})`);
-		moveAction(coords).execute();
+		try
+		{
+			moveAction(coords).execute();
+		}
+		catch (e)
+		{
+			if (e instanceof Error)
+				console.log(e.message);
+			else
+				console.log(e);
+		}
 		moveAction = null;
 		console.log(`moveAction cleared: ${moveAction}`);
 		return;
 	}
 	gameState.selection = gameState.select(e.offsetX, e.offsetY, gameState.humanPlayer);
-	if (gameState.selection)
+	//if (gameState.selection)
 		resolvePlayerActions();
 });
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
 	console.log('Next Turn');
+	gameState.cleanupDefeatedPlayers();
+	aiThink();
+	gameState.cleanupDefeatedPlayers();
+	if (gameState.checkWinner() != null)
+	{
+		gameState.gameover = true;
+		console.log("Game Over");
+		return;
+	}
 	gameState.currentTurn += 1;
 	gameState.soldiers.forEach(s => s.movesLeft = s.moves);
 	gameState.cities.forEach(s => s.movesLeft = s.moves);
@@ -173,9 +186,14 @@ function calculateActions(player: Player, selection: Positioned): ActionOption[]
 				if (enemiesInRange.length > 0)
 					actions.push(new ActionOption("Attack", () => { 
 						moveAction = (p: Point2d) => {
-							const target = enemiesInRange.find(pos => pos.col == p.x && pos.row == p.y);
+							//console.log(`Attacking on ${p} -> ${p.stepScale(gameState.tileSize)}`);
+							const target = enemiesInRange.find(pos => {
+								const result = pos.col == p.x && pos.row == p.y;
+								console.log(`	comparing ${p} to (${pos.col},${pos.row}) = ${result}`);
+								return result;
+							});
 							if (target && target.type == "Soldier")
-								return new AttackSoldierAction(selection, target);
+								return new AttackSoldierAction(selection, target, gameState);
 							else
 								throw new Error("Invalid attack target");
 						};
@@ -225,6 +243,22 @@ function findNearestEnemyTarget(player: Player, origin: Point2d, exclude: Positi
 	return nearest;
 }
 
+function findMoveableTiles(player: Player, origin: Point2d, range: number, gameState: GameState): Point2d[]
+{
+	const result: Point2d[] = [];
+	for (let r = Math.max(0, origin.y - range); r <= origin.y + range; r++)
+	{
+		for (let c = Math.max(0, origin.x - range); r <= origin.x + range; c++)
+		{
+			const tile: Tile = gameState.tileAtCoords(c, r);
+			if (tile.terrain == Terrain.WATER || tile.terrain == Terrain.MOUNTAINS)
+				continue;
+			result.push(new Point2d(c, r));
+		}
+	}
+	return result;
+}
+
 function findEnemiesInRange(player: Player, origin: Point2d, range: number): Positioned[]
 {
 	const result: Positioned[] = [];
@@ -251,15 +285,15 @@ function aiThink()
 				soldierCount++;
 			
 			const actions: ActionOption[] = calculateActions(player, pos)
-				.filter(a => a.name != "Train Soldier" || soldierCount < 3)
-				.sort((a,b) => a.name == "Move" ? -1 : 0)
+				.filter(a => a.name != "Train Soldier" || soldierCount < 1)
+				.sort((a,b) => a.name == "Attack" ? -1 : b.name == "Attack" ? 1 : a.name == "Move" ? -1 : b.name == "Move" ? 1 : 0)
 			;
 
 			for (const action of actions)
 			{
 				console.log(`AI Executing ${action.name}`);
 				action.execute();
-				if (action.name == "Move" && moveAction)
+				if ((action.name == "Move" || action.name == "Attack") && moveAction)
 				{
 					let origin: Point2d = new Point2d(pos.col, pos.row);
 					const nearestTarget = findNearestEnemyTarget(player, origin, targets);
@@ -269,13 +303,17 @@ function aiThink()
 						continue;
 					}
 					console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
-					let vx = nearestTarget.col - origin.x, vy = nearestTarget.row - origin.y;
-					vx = vx > 0 ? 1 : vx < 0 ? -1 : 0;
-					vy = vy > 0 ? 1 : vy < 0 ? -1 : 0;
-					if (vx == 0 && vy == 0)
+					const path: Point2d[] = aStar(gameState, origin, nearestTarget.position());
+					console.log(`Path to target: ${path}`);
+					if (path.length < 2)
+					{
+						moveAction = null;
+						console.log(`moveAction cleared: ${moveAction}`);
 						continue;
+					}
 					targets.push(nearestTarget);
-					moveAction(new Point2d(origin.x + vx, origin.y + vy)).execute();
+					(pos as Soldier).path = path;
+					moveAction(path[1]).execute();
 					moveAction = null;
 					console.log(`moveAction cleared: ${moveAction}`);
 				}
