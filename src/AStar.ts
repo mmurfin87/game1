@@ -46,7 +46,7 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d): Poin
 				continue;  // Ignore the neighbor which is already evaluated
 
 			// The distance from start to a neighbor
-			const tentative_gScore = current.scoreTo + current.pos.stepsTo(neighbor);
+			const tentative_gScore = current.scoreTo + distance_heuristic(current.pos, neighbor);
 
 			let node = openSet.find(n => Point2d.equivalent(n.pos, neighbor));
 			if (node == undefined)  // Discover a new node
@@ -61,12 +61,19 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d): Poin
 			// This path is the best until now. Record it!
 			node.cameFrom = current;
 			node.scoreTo = tentative_gScore;
-			node.scoreFrom = tentative_gScore + neighbor.stepsTo(goal);
+			node.scoreFrom = tentative_gScore + distance_heuristic(neighbor, goal);
 			openSet.sort((a,b) => a.scoreFrom - b.scoreFrom);
 		}
 	}
 	console.log(`No Path from ${start} to ${goal}`);
 	return []  // No path was found
+}
+
+const sqrt2 = 1;//Math.sqrt(2);
+function distance_heuristic(origin: Point2d, target: Point2d)
+{
+	const dx = Math.abs(target.x - origin.x), dy = Math.abs(target.y - origin.y);
+	return Math.max(dx, dy) + sqrt2 * Math.min(dx, dy);
 }
 
 function neighbors(gameState: GameState, node: Node): Point2d[]

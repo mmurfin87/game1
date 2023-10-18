@@ -1,9 +1,8 @@
 export class Player
 {
-	id: number;
-
-	constructor(id: number)
-	{
-		this.id = id;
-	}
+	constructor(
+		public readonly id: number,
+		public readonly color: string
+	)
+	{}
 }

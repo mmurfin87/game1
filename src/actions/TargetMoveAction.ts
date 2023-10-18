@@ -1,4 +1,5 @@
-import { Player } from "../Player.js";
+import { aStar } from "../AStar.js";
+import { GameState } from "../GameState.js";
 import { Point2d } from "../Point2d.js";
 import { Positioned } from "../Positioned.js";
 import { Soldier } from "../Soldier.js";
@@ -10,14 +11,14 @@ export class TargetMoveAction implements Action
 {
     constructor(
         private readonly selection: Soldier,
-        private readonly coords: Point2d)
+        private readonly coords: Point2d,
+        private readonly gameState: GameState
+    )
     {}
 
     execute(): void
     {
-        const distanceToTarget: number = new Point2d(this.selection.col, this.selection.row).stepsTo(this.coords);
-        if (distanceToTarget > this.selection.movesLeft ||!this.selection.moveTo(this.coords))
-            throw new Error("Unable to move");
-        this.selection.movesLeft -= distanceToTarget;
+        const path = aStar(this.gameState, this.selection.position(), this.coords);
+        this.selection.move(this.gameState.currentTurn, this.gameState.currentTime, path);
     }
 }

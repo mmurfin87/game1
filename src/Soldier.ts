@@ -5,9 +5,8 @@ export class Soldier
 {
 	public readonly type = "Soldier";
 	public path: Point2d[] | null = null;
-	private target: {row: number, col: number} | null = null;
-	private moveStartRealTime: number | null = null;
-	private moveStartGameTime: number | null = null;
+	private moveStartTurn: number | null = null;
+	private moveStartTime: number | null = null;
 
 	constructor(
 		public row: number, 
@@ -24,46 +23,70 @@ export class Soldier
 		return new Point2d(this.col, this.row);
 	}
 
-	moveTo(target: Point2d): boolean {
+	move(currentTurn: number, currentTime: number, path: Point2d[]): boolean
+	{
+		if (path.length < 2)
+		{
+			console.log(`path is too short: ${path.length}`);
+			return false;
+		}
+		this.path = path;
+		this.moveStartTurn = currentTurn;
+		this.moveStartTime = currentTime - 500;
+		console.log(`Moving (${this.row},${this.col}) to ${this.path[this.path.length-1]}`);
+		return true;
+	}
+
+	moveTo(currentTurn: number, currentTime: number, target: Point2d): boolean {
 		const distanceToTarget = target.stepsTo(new Point2d(this.col, this.row));
 		if (distanceToTarget > this.movesLeft)
 		{
 			console.log("Refusing order");
 			return false;
 		}
-		this.target = { row: target.y, col: target.x };
-		this.moveStartRealTime = Date.now();
-		console.log(`Moving (${this.row},${this.col}) to (${target.y},${target.x}) a distance of ${distanceToTarget}`);
-		return true;
+		return this.move(currentTurn, currentTime, [this.position(), target]);
 	}
 
-	update(currentTime: number): void {
-		if (!this.target)
+	update(currentTurn: number, currentTime: number): void
+	{
+		if (currentTurn === this.moveStartTurn)
+			this.animateMove(currentTime);
+	}
+
+	nextTurn(currentTurn: number, currentTime: number): void
+	{
+		this.animateMove(currentTime);
+	}
+
+	private animateMove(currentTime: number): void
+	{
+		if (!this.path)
 			return; // No target to move to
 		else
-		{
-			if (this.moveStartGameTime == null && this.moveStartRealTime != null)
+		{			
+			if (this.row == this.path[this.path.length-1].y && this.col == this.path[this.path.length-1].x)
 			{
-				this.moveStartGameTime = currentTime - 500 - (Date.now() - this.moveStartRealTime);
-				this.moveStartRealTime = null;
-			}
-
-			
-			if (this.row == this.target.row && this.col == this.target.col)
-			{
-				this.target = null;
-				this.moveStartGameTime = null;
+				this.path = null;
+				this.moveStartTime = null;
 				console.log(`Arrived (${this.row},${this.col})`);
 			}
-			else if (this.moveStartGameTime != null && currentTime - this.moveStartGameTime >= 500)
+			else if (this.moveStartTime != null && currentTime - this.moveStartTime >= 500)
 			{
-				const x = this.target.row - this.row, y = this.target.col - this.col;
-				const distance = Math.sqrt(x * x + y * y);
-				const ux = Math.round(x / distance),  uy = Math.round(y / distance);
-				console.log(`${currentTime} (${currentTime - this.moveStartGameTime}) | Moving (${this.row},${this.col}) by (${ux},${uy})`)
-				this.row += ux;
-				this.col += uy;
-				this.moveStartGameTime = currentTime;
+				let i = 1;
+				if (i < this.path.length)
+				{
+					const steps = this.path[i-1].stepsTo(this.path[i]);
+					if (steps <= this.movesLeft)
+					{
+						this.col = this.path[i].x;
+						this.row = this.path[i].y;
+						this.movesLeft -= steps;
+						this.moveStartTime = currentTime;
+						this.path.shift();
+					}
+				}
+				else
+					this.path = null;
 			}
 		}
 	}

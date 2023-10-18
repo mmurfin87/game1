@@ -109,6 +109,8 @@ export class Renderer
 	renderBoard(gameState: GameState)
 	{
 		const ts = gameState.tileSize;
+		const hts = ts / 2;
+		const ownerBarOffset = Math.round(ts * 0.9), ownerBarHeight = ts - ownerBarOffset;
 
 		// Clear canvas
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -129,23 +131,27 @@ export class Renderer
 				this.ctx.fillRect(c*ts, r*ts, ts, ts);
 			}
 		}
-
+	
 		// Draw cities
 		gameState.cities.forEach(city => {
 			this.ctx.fillStyle = 'yellow';
 			this.ctx.fillRect(city.col * ts, city.row * ts, ts, ts);
+			this.ctx.fillStyle = city.player.color;
+			this.ctx.fillRect(city.col * ts, city.row * ts, ts, ownerBarHeight);
 			this.drawTextCenteredOn(''+city.player.id, 12, "black", city.col*ts+ts/2, city.row*ts+5);
 		});
 
 		// Draw soldiers
-		const hts = ts / 2;
 		gameState.soldiers.forEach(soldier => {
 			this.ctx.fillStyle = 'black';
 			this.ctx.fillRect(soldier.col * ts + hts/2, soldier.row * ts + hts/2, hts, hts);
+			this.ctx.fillStyle = soldier.player.color;
+			this.ctx.fillRect(soldier.col * ts + hts/2, soldier.row * ts + hts/2, hts, ownerBarHeight);
 			this.drawTextCenteredOn(''+soldier.player.id, 12, "white", soldier.col*ts+ts/2, soldier.row*ts+ts/2)
-			soldier.update(gameState.currentTime);
+			soldier.update(gameState.currentTurn, gameState.currentTime);
 		});
 
+		// Draw Soldier paths
 		gameState.soldiers.forEach(soldier => {
 			if (soldier.path == null)
 				return;

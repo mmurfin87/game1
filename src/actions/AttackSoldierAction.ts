@@ -25,7 +25,7 @@ export class AttackSoldierAction implements Action
 				throw new Error("can't find defender in gamestate soldiers list");
 			console.log(`Removing Defender from index ${index}`);
 			this.gameState.soldiers.splice(index, 1);
-			this.attacker.moveTo(this.defender.position());
+			this.attacker.moveTo(this.gameState.currentTurn, this.gameState.currentTime, this.defender.position());
 		}
 		
 		this.attacker.movesLeft -= distance;

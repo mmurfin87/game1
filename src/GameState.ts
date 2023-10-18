@@ -67,20 +67,32 @@ export class GameState
 					this.map[row * this.numRows + col] = new Tile(terrain);
 
 				if (Math.random() < 0.1) {
+					if (this.cities.some(city => Math.abs(city.row - row) < 3 && Math.abs(city.col - col) < 3))
+						continue;
 					this.map[row * this.numRows + col].terrain = Terrain.GRASSLAND;	// make sure city is on a traversible ground
-					//this.cities.push(new City(row, col, this.barbarianPlayer, 1));
+					this.cities.push(new City(row, col, this.barbarianPlayer, 1));
 				}
 			}
 		}
-		this.map[0 * this.numRows + 0].terrain = Terrain.GRASSLAND
-		this.map[0 * this.numRows + this.numCols-1].terrain = Terrain.GRASSLAND
-		this.map[this.numRows + this.numCols-1].terrain = Terrain.GRASSLAND
 
-		this.cities.push(new City(0, 0, this.barbarianPlayer, 1));
-		this.cities.push(new City(0, this.numCols-1, this.barbarianPlayer, 1));
-		this.cities.push(new City(this.numRows-1, this.numCols-1, this.barbarianPlayer, 1));
-		this.cities[0].player = this.humanPlayer;
-		this.cities[this.cities.length-1].player = this.players[this.players.length-1];
+		for (const player of this.players)
+		{
+			if (player == this.barbarianPlayer)
+				continue;
+			let index = Math.floor(Math.random() * this.cities.length);
+			for (let i = (index + 1) % this.cities.length; i < this.cities.length; i = (i + 1) % this.cities.length)
+			{
+				if (this.cities[index].player == this.barbarianPlayer)
+					break;
+				if (i == index)
+					throw new Error("Not enough cities");
+			}
+			this.cities[index].player = player;
+
+		}
+		//this.cities[0].player = this.humanPlayer;
+		//this.cities[this.cities.length-5].player = this.players[2];
+		//this.cities[this.cities.length-1].player = this.players[this.players.length-1];
 	}
 
 	select(x: number, y: number, player:Player): Positioned | null
@@ -123,7 +135,7 @@ export class GameState
 		return this.tileAtCoords(coords.x, coords.y);
 	}
 
-	public tileAtCoords(x: number, y: number): Tile
+	tileAtCoords(x: number, y: number): Tile
 	{
 		return this.map[y * this.numRows + x];
 	}

@@ -13,28 +13,29 @@ import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
 
+const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+
 const gameState: GameState = (() => {
-	const numRows = 5, numCols = 5;
-	const barbarianPlayer = new Player(0);
-	const humanPlayer = new Player(1);
+	const numRows = 10, numCols = 10;
+	const barbarianPlayer = new Player(0, 'white');
+	const humanPlayer = new Player(1, 'turquoise');
 	return new GameState(
 		0,
 		0,
 		new Array(numRows * numCols).fill(null),
-		500/numRows,
+		Math.min(canvas.height / numRows, canvas.width / numCols),
 		numRows,
 		numCols,
 		[],
 		[],
 		barbarianPlayer,
 		humanPlayer,
-		[ barbarianPlayer, humanPlayer, new Player(2) ],
+		[ barbarianPlayer, humanPlayer, new Player(2, 'red'), new Player(3, 'purple')],
 		null
 	);
 })();
 
 const renderer: Renderer = (() => {
-	const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 	return new Renderer(
 		canvas,
 		canvas.getContext('2d') as CanvasRenderingContext2D,
@@ -46,6 +47,7 @@ const renderer: Renderer = (() => {
 
 function gameLoop()
 {
+	gameState.currentTime = Date.now();
 	renderer.render(gameState);
 	requestAnimationFrame(gameLoop);
 }
@@ -82,20 +84,31 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 			const origin: Point2d = new Point2d(gameState.selection.col, gameState.selection.row);
 			const target: Point2d = new Point2d(clickX, clickY).stepScale(gameState.tileSize);
 			const distanceToTarget = origin.stepsTo(target);
-			if (distanceToTarget <= soldier.movesLeft)
+			
+			const targetTerrain: Terrain = gameState.map[target.y * gameState.numRows + target.x].terrain;
+			if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
+				console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
+			else if (distanceToTarget < soldier.movesLeft)
 			{
-				const targetTerrain: Terrain = gameState.map[target.y * gameState.numRows + target.x].terrain;
-				if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
-					console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
+				const occupant = gameState.soldiers.find(s => s.col == target.x && s.row == target.y && s.type == "Soldier");
+				if (occupant)
+				{
+					if (occupant.player == gameState.humanPlayer)
+						console.log(`Can't stack friendly units`);
+					else
+						new AttackSoldierAction(soldier, occupant, gameState).execute();
+				}
 				else
 				{
 					console.log(`Target (${target.y},${target.x}) distance ${distanceToTarget} in range ${soldier.movesLeft}`);
-					soldier.moveTo(target);
-					soldier.movesLeft -= distanceToTarget;
+					soldier.moveTo(gameState.currentTurn, gameState.currentTime, target);
 				}
 			}
 			else
-				console.log(`Target (${target.y},${target.x}) distance ${distanceToTarget} out of range ${soldier.movesLeft}`);
+			{
+				soldier.move(gameState.currentTurn, gameState.currentTime, aStar(gameState, origin, target));
+			}
+			
 			break;
 		}
 	}
@@ -131,6 +144,7 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 });
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
+	gameState.soldiers.forEach(soldier => soldier.nextTurn(gameState.currentTurn, gameState.currentTime));
 	console.log('Next Turn');
 	gameState.cleanupDefeatedPlayers();
 	aiThink();
@@ -181,7 +195,7 @@ function calculateActions(player: Player, selection: Positioned): ActionOption[]
 		case "Soldier":
 			if (selection.movesLeft > 0)
 			{
-				actions.push(new ActionOption("Move", () => { moveAction = (p: Point2d) => new TargetMoveAction(selection, p); }));
+				actions.push(new ActionOption("Move", () => { moveAction = (p: Point2d) => new TargetMoveAction(selection, p, gameState); }));
 				const settlement: City | undefined = gameState.search(selection.row, selection.col).find(pos => pos.type == "City" && pos.player != player) as City | undefined;
 				if (settlement)
 					actions.push(new ActionOption("Settle", () => new SettleAction(player, selection, settlement).execute()));
@@ -289,7 +303,19 @@ function aiThink()
 			
 			const actions: ActionOption[] = calculateActions(player, pos)
 				.filter(a => a.name != "Train Soldier" || soldierCount < 3)
-				.sort((a,b) => a.name == "Attack" ? -1 : b.name == "Attack" ? 1 : a.name == "Move" ? -1 : b.name == "Move" ? 1 : 0)
+				.sort((a,b) => a.name == "Settle"
+					? -1
+					: b.name == "Settle"
+						? 1
+						: a.name == "Attack" 
+							? -1 
+							: b.name == "Attack" 
+								? 1 
+								: a.name == "Move" 
+									? -1 
+									: b.name == "Move" 
+										? 1 
+										: 0)
 			;
 
 			for (const action of actions)
@@ -306,18 +332,9 @@ function aiThink()
 						continue;
 					}
 					console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
-					const path: Point2d[] = aStar(gameState, origin, nearestTarget.position());
-					console.log(`Path to target: ${path}`);
-					if (path.length < 2)
-					{
-						moveAction = null;
-						console.log(`moveAction cleared: ${moveAction}`);
-						continue;
-					}
-					targets.push(nearestTarget);
-					(pos as Soldier).path = path;
-					moveAction(path[1]).execute();
+					moveAction(nearestTarget.position()).execute();
 					moveAction = null;
+					targets.push(nearestTarget);
 					console.log(`moveAction cleared: ${moveAction}`);
 				}
 				break;
