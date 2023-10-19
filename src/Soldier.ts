@@ -30,21 +30,28 @@ export class Soldier
 			console.log(`path is too short: ${path.length}`);
 			return false;
 		}
+		if (path[0].x != this.col || path[0].y != this.row)
+		{
+			console.log(`path must begin at current location ${this.position()} but was given as ${path[0]}`);
+			return false;
+		}
 		this.path = path;
 		this.moveStartTurn = currentTurn;
 		this.moveStartTime = currentTime - 500;
 		console.log(`Moving (${this.row},${this.col}) to ${this.path[this.path.length-1]}`);
+		this.followPathWhileAble(currentTime);
 		return true;
 	}
 
 	moveTo(currentTurn: number, currentTime: number, target: Point2d): boolean {
-		const distanceToTarget = target.stepsTo(new Point2d(this.col, this.row));
-		if (distanceToTarget > this.movesLeft)
-		{
-			console.log("Refusing order");
-			return false;
-		}
 		return this.move(currentTurn, currentTime, [this.position(), target]);
+	}
+
+	stop(): void
+	{
+		this.path = null;
+		this.moveStartTime = null;
+		this.moveStartTurn = null;
 	}
 
 	update(currentTurn: number, currentTime: number): void
@@ -56,6 +63,27 @@ export class Soldier
 	nextTurn(currentTurn: number, currentTime: number): void
 	{
 		this.animateMove(currentTime);
+	}
+
+	private followPathWhileAble(currentTime: number): void
+	{
+		if (this.path == null)
+			return;
+		let i = 1;
+		if (i < this.path.length)
+		{
+			const steps = this.path[i-1].stepsTo(this.path[i]);
+			if (steps <= this.movesLeft)
+			{
+				this.col = this.path[i].x;
+				this.row = this.path[i].y;
+				this.movesLeft -= steps;
+				this.moveStartTime = currentTime;
+				this.path.shift();
+			}
+		}
+		else
+			this.stop();
 	}
 
 	private animateMove(currentTime: number): void
@@ -72,21 +100,7 @@ export class Soldier
 			}
 			else if (this.moveStartTime != null && currentTime - this.moveStartTime >= 500)
 			{
-				let i = 1;
-				if (i < this.path.length)
-				{
-					const steps = this.path[i-1].stepsTo(this.path[i]);
-					if (steps <= this.movesLeft)
-					{
-						this.col = this.path[i].x;
-						this.row = this.path[i].y;
-						this.movesLeft -= steps;
-						this.moveStartTime = currentTime;
-						this.path.shift();
-					}
-				}
-				else
-					this.path = null;
+				this.followPathWhileAble(currentTime);
 			}
 		}
 	}

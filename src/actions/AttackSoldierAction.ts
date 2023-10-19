@@ -28,6 +28,6 @@ export class AttackSoldierAction implements Action
 			this.attacker.moveTo(this.gameState.currentTurn, this.gameState.currentTime, this.defender.position());
 		}
 		
-		this.attacker.movesLeft -= distance;
+		//this.attacker.movesLeft -= distance;
 	}
 }

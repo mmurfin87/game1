@@ -5,7 +5,11 @@ import { Terrain } from "./Tile.js";
 
 export class Renderer
 {
-	private lastTime: number = 0;
+	private readonly grasslands = (() => {
+		const tmp = new Image();
+		tmp.src = "http://localhost:8080/grass(1).png";
+		return tmp;
+	})();
 	private finalRenderImage: ImageData | null = null;
 
 	constructor(
@@ -72,14 +76,9 @@ export class Renderer
 				this.renderVictory();
 			else
 				this.renderDefeat();
-			this.lastTime = gameState.currentTime;
-			return;
 		}
-
-		this.renderBoard(gameState);
-		
-
-		this.lastTime = gameState.currentTime;
+		else
+			this.renderBoard(gameState);
 	}
 
 	drawTextCenteredOn(text: string, fontSize: number, color: string, x: number, y: number)
@@ -110,7 +109,7 @@ export class Renderer
 	{
 		const ts = gameState.tileSize;
 		const hts = ts / 2;
-		const ownerBarOffset = Math.round(ts * 0.9), ownerBarHeight = ts - ownerBarOffset;
+		const ownerBarOffset = Math.round(ts - 13), ownerBarHeight = ts - ownerBarOffset;
 
 		// Clear canvas
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -129,6 +128,8 @@ export class Renderer
 					default:				this.ctx.fillStyle = "red";		break;
 				}
 				this.ctx.fillRect(c*ts, r*ts, ts, ts);
+				//if (gameState.tileAtCoords(c, r).terrain == Terrain.GRASSLAND && this.grasslands.complete)
+				//	this.ctx.drawImage(this.grasslands, 0, 0, this.grasslands.width, this.grasslands.height, c*ts, r*ts, ts, ts);
 			}
 		}
 	

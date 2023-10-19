@@ -88,12 +88,14 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 			const targetTerrain: Terrain = gameState.map[target.y * gameState.numRows + target.x].terrain;
 			if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
 				console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
-			else if (distanceToTarget < soldier.movesLeft)
+			else if (distanceToTarget <= soldier.movesLeft)
 			{
 				const occupant = gameState.soldiers.find(s => s.col == target.x && s.row == target.y && s.type == "Soldier");
 				if (occupant)
 				{
-					if (occupant.player == gameState.humanPlayer)
+					if (occupant == soldier)
+						soldier.stop();
+					else if (occupant.player == gameState.humanPlayer)
 						console.log(`Can't stack friendly units`);
 					else
 						new AttackSoldierAction(soldier, occupant, gameState).execute();
@@ -101,7 +103,7 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 				else
 				{
 					console.log(`Target (${target.y},${target.x}) distance ${distanceToTarget} in range ${soldier.movesLeft}`);
-					soldier.moveTo(gameState.currentTurn, gameState.currentTime, target);
+					new TargetMoveAction(soldier, target, gameState).execute();
 				}
 			}
 			else
@@ -301,21 +303,10 @@ function aiThink()
 			if (pos.type == 'Soldier')
 				soldierCount++;
 			
+			const actionSorting = ["Move", "Attack", "Settle"];	// reverse sorted in increasing precedence
 			const actions: ActionOption[] = calculateActions(player, pos)
 				.filter(a => a.name != "Train Soldier" || soldierCount < 3)
-				.sort((a,b) => a.name == "Settle"
-					? -1
-					: b.name == "Settle"
-						? 1
-						: a.name == "Attack" 
-							? -1 
-							: b.name == "Attack" 
-								? 1 
-								: a.name == "Move" 
-									? -1 
-									: b.name == "Move" 
-										? 1 
-										: 0)
+				.sort((a,b) => (actionSorting.indexOf(b.name) ) - (actionSorting.indexOf(a.name) ?? 1))
 			;
 
 			for (const action of actions)

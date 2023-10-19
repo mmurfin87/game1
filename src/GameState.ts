@@ -80,7 +80,7 @@ export class GameState
 			if (player == this.barbarianPlayer)
 				continue;
 			let index = Math.floor(Math.random() * this.cities.length);
-			for (let i = (index + 1) % this.cities.length; i < this.cities.length; i = (i + 1) % this.cities.length)
+			for (let i = (index + 1) % this.cities.length; i != index; i = (i + 1) % this.cities.length)
 			{
 				if (this.cities[index].player == this.barbarianPlayer)
 					break;
