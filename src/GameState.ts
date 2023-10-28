@@ -13,7 +13,6 @@ export class GameState
 		public currentTime: number,
 		public currentTurn: number,
 		public readonly map: Tile[],
-		public readonly tileSize: number,
 		public readonly numRows: number,
 		public readonly numCols: number,
 		public readonly cities: City[],
@@ -50,27 +49,30 @@ export class GameState
 	// Function to generate random cities
 	generateRandomCities()
 	{
-		for (let row = 0; row < this.numRows; row++)
+		while (this.cities.length < this.players.length)
 		{
-			for (let col = 0; col < this.numCols; col++)
+			for (let row = 0; row < this.numRows; row++)
 			{
-				const rand = Math.random();
-				let terrain: Terrain = Terrain.GRASSLAND;
-				if (rand < 0.55)
-					terrain = Terrain.GRASSLAND;
-				else if (rand < 0.8)
-					terrain = Terrain.FOREST;
-				else if (rand < 0.9)
-					terrain = Terrain.MOUNTAINS;
-				else
-					terrain = Terrain.WATER;
-					this.map[row * this.numRows + col] = new Tile(terrain);
+				for (let col = 0; col < this.numCols; col++)
+				{
+					const rand = Math.random();
+					let terrain: Terrain = Terrain.GRASSLAND;
+					if (rand < 0.55)
+						terrain = Terrain.GRASSLAND;
+					else if (rand < 0.8)
+						terrain = Terrain.FOREST;
+					else if (rand < 0.9)
+						terrain = Terrain.MOUNTAINS;
+					else
+						terrain = Terrain.WATER;
+						this.map[row * this.numRows + col] = new Tile(terrain);
 
-				if (Math.random() < 0.1) {
-					if (this.cities.some(city => Math.abs(city.row - row) < 3 && Math.abs(city.col - col) < 3))
-						continue;
-					this.map[row * this.numRows + col].terrain = Terrain.GRASSLAND;	// make sure city is on a traversible ground
-					this.cities.push(new City(row, col, this.barbarianPlayer, 1));
+					if (Math.random() < 0.1) {
+						if (this.cities.some(city => Math.abs(city.row - row) < 3 && Math.abs(city.col - col) < 3))
+							continue;
+						this.map[row * this.numRows + col].terrain = Terrain.GRASSLAND;	// make sure city is on a traversible ground
+						this.cities.push(new City(row, col, this.barbarianPlayer, 1));
+					}
 				}
 			}
 		}
@@ -95,19 +97,17 @@ export class GameState
 		//this.cities[this.cities.length-1].player = this.players[this.players.length-1];
 	}
 
-	select(x: number, y: number, player:Player): Positioned | null
+	select(gridCoords: Point2d, player:Player): Positioned | null
 	{
-		const r = Math.floor(y / this.tileSize), c = Math.floor(x / this.tileSize);
-		for (const pos of this.search(r, c))
+		for (const pos of this.search(gridCoords.y, gridCoords.x))
 			if (pos.player.id == player.id)
 				return pos;
 		return null;
 	}
 
-	target<T extends Positioned>(x: number, y: number, player: Player, restrictType?: T['type']): T | null
+	target<T extends Positioned>(gridCoords: Point2d, player: Player, restrictType?: T['type']): T | null
 	{
-		const r = Math.floor(y / this.tileSize), c = Math.floor(x / this.tileSize);
-		for (const pos of this.search(r, c))
+		for (const pos of this.search(gridCoords.y, gridCoords.x))
 		{
 			if (restrictType && pos.type !== restrictType)
 				break;

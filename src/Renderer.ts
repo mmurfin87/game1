@@ -1,25 +1,88 @@
+import { Camera } from "./Camera.js";
 import { GameState } from "./GameState.js";
+import { Point2d } from "./Point2d.js";
 import { Positioned } from "./Positioned.js";
 import { Terrain } from "./Tile.js";
 
+function loadimage(url: string): HTMLImageElement
+{
+	const tmp = new Image();
+	tmp.src = url;
+	return tmp;
+}
+
+interface DebugObject
+{
+	render(ctx: CanvasRenderingContext2D): void;
+}
+
+export class SimpleDebugObject
+{
+	constructor(
+		public coords: Point2d,
+		public width: number,
+		public height: number,
+		public text: string | null = null
+	)
+	{}
+
+	render(ctx: CanvasRenderingContext2D): void
+	{
+		ctx.fillStyle = "red";
+		ctx.fillRect(this.coords.x, this.coords.y, this.width, this.height);
+		if (this.text != null)
+			drawTextCenteredOn(ctx, this.text, this.height, 'black', this.coords.x, this.coords.y);
+	}
+}
+
+export class LineDebugObject implements DebugObject
+{
+	constructor(
+		public origin: Point2d,
+		public target: Point2d,
+		public thickness: number
+	)
+	{}
+
+	render(ctx: CanvasRenderingContext2D): void
+	{
+		ctx.beginPath();
+		ctx.moveTo(this.origin.x, this.origin.y);
+		ctx.lineTo(this.target.x, this.target.y);
+		ctx.closePath();
+		ctx.lineWidth = this.thickness;
+		ctx.strokeStyle = 'red';
+		ctx.stroke();
+	}
+}
 
 export class Renderer
 {
-	private readonly grasslands = (() => {
-		const tmp = new Image();
-		tmp.src = "http://localhost:8080/grass(1).png";
-		return tmp;
-	})();
+	public readonly debug: DebugObject[] = [];
+
+	private readonly isoTilePath: Path2D;
+	private readonly grasslands = loadimage("http://localhost:8080/isograss.png");
+	private readonly mountains = loadimage("http://localhost:8080/isomountain.png");
 	private finalRenderImage: ImageData | null = null;
 
 	constructor(
+		public readonly camera: Camera,
 		public readonly canvas: HTMLCanvasElement,
 		private readonly ctx: CanvasRenderingContext2D,
 		private readonly actions: HTMLDivElement,
 		public readonly unitActions: HTMLElement,
-		public readonly nextTurn: HTMLButtonElement
+		public readonly nextTurn: HTMLButtonElement,
+		private readonly tileSize: number
 	)
-	{}
+	{
+		const ox = 0, oy = 0;
+		this.isoTilePath = new Path2D();
+		this.isoTilePath.moveTo(ox, oy);
+		this.isoTilePath.lineTo(ox + tileSize, oy + tileSize/2);
+		this.isoTilePath.lineTo(ox, oy + tileSize);
+		this.isoTilePath.lineTo(ox - tileSize, oy + tileSize/2);
+		this.isoTilePath.closePath();
+	}
 
 	private renderVictory(): void
 	{
@@ -79,25 +142,25 @@ export class Renderer
 		}
 		else
 			this.renderBoard(gameState);
+
+		this.debug.forEach(d => d.render(this.ctx));
 	}
 
 	drawTextCenteredOn(text: string, fontSize: number, color: string, x: number, y: number)
 	{
-		this.ctx.fillStyle = color;
-		this.ctx.font = fontSize + 'px Arial';
-		const width = this.ctx.measureText(text).width;
-		this.ctx.fillText(text, x-(width/2), y+fontSize/2);
+		drawTextCenteredOn(this.ctx, text, fontSize, color, x, y);
 	}
 
 	// Function to draw the red circle around the selected city
 	drawSelection(position: Positioned, tileSize: number)
 	{
+		const offset = this.gridToScreenCoords(position.position());
 		this.ctx.strokeStyle = 'red';
 		this.ctx.lineWidth = 2;
 		this.ctx.beginPath();
 		this.ctx.arc(
-			position.col * tileSize + tileSize / 2,
-			position.row * tileSize + tileSize / 2,
+			offset.x,
+			offset.y + this.tileSize/2,
 			tileSize / (position.type == "City" ? 2 : 3) + 2, // Adjust the radius to your liking
 			0,
 			Math.PI * 2
@@ -107,48 +170,84 @@ export class Renderer
 
 	renderBoard(gameState: GameState)
 	{
-		const ts = gameState.tileSize;
-		const hts = ts / 2;
+		const vw = this.canvas.width, hvw = vw / 2;
+		const ts = this.tileSize;
+		const hts = ts / 2, qts = hts / 2;
 		const ownerBarOffset = Math.round(ts - 13), ownerBarHeight = ts - ownerBarOffset;
 
 		// Clear canvas
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+		this.ctx.translate(-this.camera.x, -this.camera.y);
+		this.ctx.scale(this.camera.scale, this.camera.scale);
 
 		// Draw terrain
 		for (let r = 0; r < gameState.numRows; r++)
 		{
 			for (let c = 0; c < gameState.numCols; c++)
 			{
+				const offset = this.gridToScreenCoords(new Point2d(c, r));
+				this.ctx.save();
+				this.ctx.translate(offset.x, offset.y);
 				switch (gameState.map[r * gameState.numRows + c].terrain)
 				{
-					case Terrain.GRASSLAND:	this.ctx.fillStyle = "green";	break;
-					case Terrain.FOREST:	this.ctx.fillStyle = "darkgreen";break;
-					case Terrain.MOUNTAINS:	this.ctx.fillStyle = "gray";		break;
-					case Terrain.WATER:		this.ctx.fillStyle = "blue";		break;
-					default:				this.ctx.fillStyle = "red";		break;
+					case Terrain.GRASSLAND:
+						if (this.grasslands.complete)
+							this.ctx.drawImage(this.grasslands, 0, 0, this.grasslands.width, this.grasslands.height, -ts, 0, ts*2, ts);
+						else
+						{
+							this.ctx.fillStyle = "green";
+							this.ctx.fill(this.isoTilePath);
+						}
+						break;
+					case Terrain.FOREST:
+						this.ctx.fillStyle = "darkgreen";
+						this.ctx.fill(this.isoTilePath);
+						break;
+					case Terrain.MOUNTAINS:
+						if (this.mountains.complete)
+							this.ctx.drawImage(this.mountains, 0, 0, this.grasslands.width, this.grasslands.height, -ts, 0, ts*2, ts);
+						else
+						{
+							this.ctx.fillStyle = "gray";
+							this.ctx.fill(this.isoTilePath);
+						}
+						break;
+					case Terrain.WATER:
+						this.ctx.fillStyle = "blue";
+						this.ctx.fill(this.isoTilePath);
+						break;
+					default:
+						this.ctx.fillStyle = "red";
+						this.ctx.fill(this.isoTilePath);
+						break;
 				}
-				this.ctx.fillRect(c*ts, r*ts, ts, ts);
-				//if (gameState.tileAtCoords(c, r).terrain == Terrain.GRASSLAND && this.grasslands.complete)
-				//	this.ctx.drawImage(this.grasslands, 0, 0, this.grasslands.width, this.grasslands.height, c*ts, r*ts, ts, ts);
+				this.ctx.restore();
 			}
 		}
 	
 		// Draw cities
 		gameState.cities.forEach(city => {
+			const offset = this.gridToScreenCoords(city.position());
+			this.ctx.save();
 			this.ctx.fillStyle = 'yellow';
-			this.ctx.fillRect(city.col * ts, city.row * ts, ts, ts);
+			this.ctx.translate(offset.x, offset.y);
+			this.ctx.fill(this.isoTilePath);
+			//this.ctx.fillRect(city.col * ts, city.row * ts, ts, ts);
 			this.ctx.fillStyle = city.player.color;
-			this.ctx.fillRect(city.col * ts, city.row * ts, ts, ownerBarHeight);
-			this.drawTextCenteredOn(''+city.player.id, 12, "black", city.col*ts+ts/2, city.row*ts+5);
+			this.ctx.fillRect(-ts/2, 0, ts, ownerBarHeight);
+			this.drawTextCenteredOn(''+city.player.id, 12, "black", 0, 4);
+			this.ctx.restore();
 		});
 
 		// Draw soldiers
 		gameState.soldiers.forEach(soldier => {
+			const offset = this.gridToScreenCoords(soldier.position());
 			this.ctx.fillStyle = 'black';
-			this.ctx.fillRect(soldier.col * ts + hts/2, soldier.row * ts + hts/2, hts, hts);
+			this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
 			this.ctx.fillStyle = soldier.player.color;
-			this.ctx.fillRect(soldier.col * ts + hts/2, soldier.row * ts + hts/2, hts, ownerBarHeight);
-			this.drawTextCenteredOn(''+soldier.player.id, 12, "white", soldier.col*ts+ts/2, soldier.row*ts+ts/2)
+			this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, ownerBarHeight);
+			this.drawTextCenteredOn(''+soldier.player.id, 12, "white", offset.x, offset.y + ts/2)
 			soldier.update(gameState.currentTurn, gameState.currentTime);
 		});
 
@@ -157,10 +256,11 @@ export class Renderer
 			if (soldier.path == null)
 				return;
 			let last = null;
-			for (const p of soldier.path)
+			for (const step of soldier.path)
 			{
+				const p = this.gridToScreenCoords(step);
 				this.ctx.beginPath();
-				this.ctx.arc(p.x * ts + hts, p.y * ts + hts, 5, 0, Math.PI * 2);
+				this.ctx.arc(p.x, p.y + hts, 5, 0, Math.PI * 2);
 				this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
 				this.ctx.fill();
 				if (last != null)
@@ -168,8 +268,8 @@ export class Renderer
 					this.ctx.beginPath();
 					this.ctx.lineWidth = 1;
 					this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-					this.ctx.moveTo(last.x * ts + hts, last.y * ts + hts);
-					this.ctx.lineTo(p.x * ts + hts, p.y * ts + hts)
+					this.ctx.moveTo(last.x, last.y + hts);
+					this.ctx.lineTo(p.x, p.y + hts)
 					this.ctx.stroke();
 				}
 				last = p;
@@ -178,11 +278,28 @@ export class Renderer
 
 		if (gameState.selection)
 			this.drawSelection(gameState.selection, ts);
+
+		this.ctx.resetTransform();
+	}
+
+	screenToGridCoords(x: number, y: number): Point2d
+	{	
+		return this.camera.screenToGridCoords(x, y);
+	}
+
+	gridToScreenCoords(coords: Point2d): Point2d
+	{
+		return this.camera.gridToScreenCoords(coords);
 	}
 }
 
-
-
+function drawTextCenteredOn(ctx: CanvasRenderingContext2D, text: string, fontSize: number, color: string, x: number, y: number)
+{
+	ctx.fillStyle = color;
+	ctx.font = fontSize + 'px Arial';
+	const width = ctx.measureText(text).width;
+	ctx.fillText(text, x-(width/2), y+fontSize/2);
+}
 
 // Function to generate a random number within a range
 function getRandomInRange(min: number, max: number): number

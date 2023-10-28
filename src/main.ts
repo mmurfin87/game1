@@ -1,10 +1,11 @@
 import { aStar } from "./AStar.js";
+import { Camera } from "./Camera.js";
 import { City } from "./City.js";
 import { GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 import { Positioned } from "./Positioned.js";
-import { Renderer } from "./Renderer.js";
+import { SimpleDebugObject, LineDebugObject, Renderer } from "./Renderer.js";
 import { Soldier } from "./Soldier.js";
 import { Tile, Terrain } from "./Tile.js";
 import { Action } from "./actions/Action.js";
@@ -23,7 +24,6 @@ const gameState: GameState = (() => {
 		0,
 		0,
 		new Array(numRows * numCols).fill(null),
-		Math.min(canvas.height / numRows, canvas.width / numCols),
 		numRows,
 		numCols,
 		[],
@@ -35,13 +35,18 @@ const gameState: GameState = (() => {
 	);
 })();
 
+const tileSize = Math.min(canvas.height / gameState.numRows, canvas.width / gameState.numCols);
+const camera: Camera = new Camera(0, 0, canvas.width, canvas.height, 0.75, tileSize);
+
 const renderer: Renderer = (() => {
 	return new Renderer(
+		camera,
 		canvas,
 		canvas.getContext('2d') as CanvasRenderingContext2D,
 		document.getElementById("actions") as HTMLDivElement,
 		document.getElementById("unit-actions") as HTMLElement,
-		document.getElementById("nextTurn") as HTMLButtonElement
+		document.getElementById("nextTurn") as HTMLButtonElement,
+		Math.min(canvas.height / gameState.numRows, canvas.width / gameState.numCols)
 	);
 })();
 
@@ -82,7 +87,7 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 		{
 			const soldier: Soldier = gameState.selection as Soldier;
 			const origin: Point2d = new Point2d(gameState.selection.col, gameState.selection.row);
-			const target: Point2d = new Point2d(clickX, clickY).stepScale(gameState.tileSize);
+			const target: Point2d = renderer.screenToGridCoords(clickX, clickY);//new Point2d(clickX, clickY).stepScale(gameState.tileSize);
 			const distanceToTarget = origin.stepsTo(target);
 			
 			const targetTerrain: Terrain = gameState.map[target.y * gameState.numRows + target.x].terrain;
@@ -121,9 +126,13 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 // Handle click events to create soldiers and select soldiers
 let moveAction: ((coords: Point2d) => Action) | null = null;
 renderer.canvas.addEventListener('click', (e: MouseEvent) => {
+	const coords = renderer.screenToGridCoords(e.offsetX, e.offsetY);
+	console.log(`Clicked (${e.offsetX},${e.offsetY}) => ${coords}`);
+	//renderer.debug.push(new DebugObject(new Point2d(e.offsetX, e.offsetY), 2, 2, null));
+	//renderer.debug.push(new DebugObject(renderer.gridToScreenCoords(coords), 2, 2, null));
+	//renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(coords), 2));
 	if (moveAction)
 	{
-		const coords = new Point2d(e.offsetX, e.offsetY).stepScale(gameState.tileSize);
 		console.log(`Captured Coordinates for Action: (${e.offsetX},${e.offsetY}) => (${coords.x},${coords.y})`);
 		try
 		{
@@ -140,9 +149,23 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 		console.log(`moveAction cleared: ${moveAction}`);
 		return;
 	}
-	gameState.selection = gameState.select(e.offsetX, e.offsetY, gameState.humanPlayer);
+	gameState.selection = gameState.select(coords, gameState.humanPlayer);
 	//if (gameState.selection)
-		resolvePlayerActions();
+	//	renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(gameState.selection.position()), 2));
+	resolvePlayerActions();
+});
+
+renderer.canvas.addEventListener("wheel", (e: WheelEvent) => {
+	const dscale = 0.02 * (e.deltaY / camera.height);
+	const dx = dscale * camera.width  * (e.offsetX - camera.width) / camera.width, dy = dscale * camera.width * (e.offsetY - camera.width) / camera.width;
+
+	camera.scale += dscale;
+	camera.x += dx;
+	camera.y += dy;
+	//const dx = -(e.offsetX / camera.scale + camera.x);
+	//const dy = -(e.offsetY / camera.scale + camera.y);
+	//camera.x = dx;
+	//camera.y = dy;
 });
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
