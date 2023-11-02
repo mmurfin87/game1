@@ -81,15 +81,15 @@ export class GameState
 		{
 			if (player == this.barbarianPlayer)
 				continue;
-			let index = Math.floor(Math.random() * this.cities.length);
-			for (let i = (index + 1) % this.cities.length; i != index; i = (i + 1) % this.cities.length)
+			let index = Math.floor(Math.random() * this.cities.length), i = (index + 1) % this.cities.length;
+			for (; i != index; i = (i + 1) % this.cities.length)
 			{
-				if (this.cities[index].player == this.barbarianPlayer)
+				if (this.cities[i].player == this.barbarianPlayer)
 					break;
 				if (i == index)
 					throw new Error("Not enough cities");
 			}
-			this.cities[index].player = player;
+			this.cities[i].player = player;
 
 		}
 		//this.cities[0].player = this.humanPlayer;

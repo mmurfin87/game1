@@ -17,7 +17,7 @@ import { TargetMoveAction } from "./actions/TargetMoveAction.js";
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 
 const gameState: GameState = (() => {
-	const numRows = 10, numCols = 10;
+	const numRows = 20, numCols = 20;
 	const barbarianPlayer = new Player(0, 'white');
 	const humanPlayer = new Player(1, 'turquoise');
 	return new GameState(
@@ -35,8 +35,8 @@ const gameState: GameState = (() => {
 	);
 })();
 
-const tileSize = Math.min(canvas.height / gameState.numRows, canvas.width / gameState.numCols);
-const camera: Camera = new Camera(0, 0, canvas.width, canvas.height, 0.75, tileSize);
+const tileSize = 50;//Math.min(canvas.height / gameState.numRows, canvas.width / gameState.numCols);
+const camera: Camera = new Camera(0, 0, canvas.width, canvas.height, 1.0, tileSize);
 
 const renderer: Renderer = (() => {
 	return new Renderer(
@@ -46,7 +46,7 @@ const renderer: Renderer = (() => {
 		document.getElementById("actions") as HTMLDivElement,
 		document.getElementById("unit-actions") as HTMLElement,
 		document.getElementById("nextTurn") as HTMLButtonElement,
-		Math.min(canvas.height / gameState.numRows, canvas.width / gameState.numCols)
+		tileSize
 	);
 })();
 
@@ -126,8 +126,10 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 // Handle click events to create soldiers and select soldiers
 let moveAction: ((coords: Point2d) => Action) | null = null;
 renderer.canvas.addEventListener('click', (e: MouseEvent) => {
+	if (drag)
+		return;
 	const coords = renderer.screenToGridCoords(e.offsetX, e.offsetY);
-	console.log(`Clicked (${e.offsetX},${e.offsetY}) => ${coords}`);
+	console.log(`Clicked (${e.offsetX},${e.offsetY}) [${camera.x},${camera.y}] => ${coords}`);
 	//renderer.debug.push(new DebugObject(new Point2d(e.offsetX, e.offsetY), 2, 2, null));
 	//renderer.debug.push(new DebugObject(renderer.gridToScreenCoords(coords), 2, 2, null));
 	//renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(coords), 2));
@@ -156,17 +158,50 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 });
 
 renderer.canvas.addEventListener("wheel", (e: WheelEvent) => {
-	const dscale = 0.02 * (e.deltaY / camera.height);
-	const dx = dscale * camera.width  * (e.offsetX - camera.width) / camera.width, dy = dscale * camera.width * (e.offsetY - camera.width) / camera.width;
-
-	camera.scale += dscale;
+	const dscale = Math.max(-0.1, Math.min(0.1, e.deltaY * 0.001));
+	const oldscale = camera.scale;
+	camera.scale = Math.min(1.5, Math.max(0.6, camera.scale + dscale));
+	console.log(`Scroll: ${e.deltaY} -> ${dscale} => ${camera.scale}`);
+	const dwidth = camera.width * (camera.scale - oldscale), dheight = camera.height * (camera.scale - oldscale);
+	//const beforePixels = { width: camera.width * camera.scale, height: camera.height * camera.scale };
+	//const afterPixels = { width: camera.width * (camera.scale + dscale), height: camera.width * (camera.scale + dscale) };
+	//const dwidth = afterPixels.width - beforePixels.width;
+	//const dheight = afterPixels.height - beforePixels.height;
+	const percentX = e.offsetX / camera.width;
+	const percentY = e.offsetY / camera.height;
+	const dx = dwidth * percentX;
+	const dy = dheight * percentY;
+	//console.log(`ScrollPan ${dwidth},${dheight} at ${percentX},${percentY} => ${dx},${dy}`);
 	camera.x += dx;
 	camera.y += dy;
-	//const dx = -(e.offsetX / camera.scale + camera.x);
-	//const dy = -(e.offsetY / camera.scale + camera.y);
-	//camera.x = dx;
-	//camera.y = dy;
+	e.preventDefault();
 });
+
+let drag: boolean = false, dragStart: number = Number.MAX_VALUE;
+renderer.canvas.addEventListener("mousedown", (e: MouseEvent) => {
+	dragStart = Date.now();
+});
+
+renderer.canvas.addEventListener("mousemove", (e: MouseEvent) => {
+	if (Date.now() - dragStart >= 100)
+		drag = true;
+
+	if (drag)
+	{
+		camera.x -= e.movementX;
+		camera.y -= e.movementY;
+	}
+});
+
+renderer.canvas.addEventListener("mouseup", (e: MouseEvent) => {
+	drag = false;
+	dragStart = Number.MAX_VALUE;
+})
+
+renderer.canvas.addEventListener("mouseleave", (e: MouseEvent) => {
+	drag = false;
+	dragStart = Number.MAX_VALUE;
+})
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
 	gameState.soldiers.forEach(soldier => soldier.nextTurn(gameState.currentTurn, gameState.currentTime));

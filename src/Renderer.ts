@@ -62,6 +62,7 @@ export class Renderer
 
 	private readonly isoTilePath: Path2D;
 	private readonly grasslands = loadimage("http://localhost:8080/isograss.png");
+	private readonly forest = loadimage("http://localhost:8080/isoforest.png");
 	private readonly mountains = loadimage("http://localhost:8080/isomountain.png");
 	private finalRenderImage: ImageData | null = null;
 
@@ -178,8 +179,8 @@ export class Renderer
 		// Clear canvas
 		this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-		this.ctx.translate(-this.camera.x, -this.camera.y);
 		this.ctx.scale(this.camera.scale, this.camera.scale);
+		this.ctx.translate(-this.camera.x, -this.camera.y);
 
 		// Draw terrain
 		for (let r = 0; r < gameState.numRows; r++)
@@ -201,8 +202,13 @@ export class Renderer
 						}
 						break;
 					case Terrain.FOREST:
-						this.ctx.fillStyle = "darkgreen";
-						this.ctx.fill(this.isoTilePath);
+						if (this.forest.complete)
+							this.ctx.drawImage(this.forest, 0, 0, this.forest.width, this.forest.height, -ts, 0, ts*2, ts);
+						else
+						{
+							this.ctx.fillStyle = "darkgreen";
+							this.ctx.fill(this.isoTilePath);
+						}
 						break;
 					case Terrain.MOUNTAINS:
 						if (this.mountains.complete)
