@@ -16,6 +16,6 @@ export class BuildSoldierAction implements Action
 		if (this.selection.movesLeft < 1)
 			throw new Error("Not enough moves");
 		this.selection.movesLeft -= 1;
-        this.soldiers.push(new Soldier(this.selection.row, this.selection.col, this.humanPlayer, 1, 1));
+        this.soldiers.push(new Soldier(this.selection.row, this.selection.col, this.humanPlayer, 1, 10));
     }
 }

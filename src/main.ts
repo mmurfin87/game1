@@ -163,15 +163,10 @@ renderer.canvas.addEventListener("wheel", (e: WheelEvent) => {
 	camera.scale = Math.min(1.5, Math.max(0.6, camera.scale + dscale));
 	console.log(`Scroll: ${e.deltaY} -> ${dscale} => ${camera.scale}`);
 	const dwidth = camera.width * (camera.scale - oldscale), dheight = camera.height * (camera.scale - oldscale);
-	//const beforePixels = { width: camera.width * camera.scale, height: camera.height * camera.scale };
-	//const afterPixels = { width: camera.width * (camera.scale + dscale), height: camera.width * (camera.scale + dscale) };
-	//const dwidth = afterPixels.width - beforePixels.width;
-	//const dheight = afterPixels.height - beforePixels.height;
 	const percentX = e.offsetX / camera.width;
 	const percentY = e.offsetY / camera.height;
 	const dx = dwidth * percentX;
 	const dy = dheight * percentY;
-	//console.log(`ScrollPan ${dwidth},${dheight} at ${percentX},${percentY} => ${dx},${dy}`);
 	camera.x += dx;
 	camera.y += dy;
 	e.preventDefault();

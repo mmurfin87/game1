@@ -64,6 +64,9 @@ export class Renderer
 	private readonly grasslands = loadimage("http://localhost:8080/isograss.png");
 	private readonly forest = loadimage("http://localhost:8080/isoforest.png");
 	private readonly mountains = loadimage("http://localhost:8080/isomountain.png");
+	private readonly water = loadimage("http://localhost:8080/isowater.png");
+	private readonly soldier = loadimage("http://localhost:8080/soldier.png");
+	private readonly city = loadimage("http://localhost:8080/city.png");
 	private finalRenderImage: ImageData | null = null;
 
 	constructor(
@@ -212,7 +215,7 @@ export class Renderer
 						break;
 					case Terrain.MOUNTAINS:
 						if (this.mountains.complete)
-							this.ctx.drawImage(this.mountains, 0, 0, this.grasslands.width, this.grasslands.height, -ts, 0, ts*2, ts);
+							this.ctx.drawImage(this.mountains, 0, 0, this.mountains.width, this.mountains.height, -ts, 0, ts*2, ts);
 						else
 						{
 							this.ctx.fillStyle = "gray";
@@ -220,8 +223,13 @@ export class Renderer
 						}
 						break;
 					case Terrain.WATER:
-						this.ctx.fillStyle = "blue";
-						this.ctx.fill(this.isoTilePath);
+						if (this.mountains.complete)
+							this.ctx.drawImage(this.water, 0, 0, this.water.width, this.water.height, -ts, 0, ts*2, ts);
+						else
+						{
+							this.ctx.fillStyle = "blue";
+							this.ctx.fill(this.isoTilePath);
+						}
 						break;
 					default:
 						this.ctx.fillStyle = "red";
@@ -236,23 +244,34 @@ export class Renderer
 		gameState.cities.forEach(city => {
 			const offset = this.gridToScreenCoords(city.position());
 			this.ctx.save();
-			this.ctx.fillStyle = 'yellow';
 			this.ctx.translate(offset.x, offset.y);
-			this.ctx.fill(this.isoTilePath);
-			//this.ctx.fillRect(city.col * ts, city.row * ts, ts, ts);
+			if (this.city.complete)
+				this.ctx.drawImage(this.city, 0, 0, this.city.width, this.city.height, -ts, 0, ts*2, ts);
+			else
+			{
+				this.ctx.fillStyle = 'yellow';
+				this.ctx.fill(this.isoTilePath);
+			}
+			
 			this.ctx.fillStyle = city.player.color;
-			this.ctx.fillRect(-ts/2, 0, ts, ownerBarHeight);
-			this.drawTextCenteredOn(''+city.player.id, 12, "black", 0, 4);
+			const ownerbarXo = -ts/2, ownerbarYo = -hts/2
+			this.ctx.fillRect(ownerbarXo, ownerbarYo, ts, ownerBarHeight);
+			this.drawTextCenteredOn(''+city.player.id, 12, "black", 0, ownerbarYo+4);
 			this.ctx.restore();
 		});
 
 		// Draw soldiers
 		gameState.soldiers.forEach(soldier => {
 			const offset = this.gridToScreenCoords(soldier.position());
-			this.ctx.fillStyle = 'black';
-			this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
+			if (this.soldier.complete)
+				this.ctx.drawImage(this.soldier, 0, 0, this.soldier.width, this.soldier.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
+			else
+			{
+				this.ctx.fillStyle = 'black';
+				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
+			}
 			this.ctx.fillStyle = soldier.player.color;
-			this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, ownerBarHeight);
+			this.ctx.fillRect(offset.x - ts/4, offset.y - hts, hts, ownerBarHeight);
 			this.drawTextCenteredOn(''+soldier.player.id, 12, "white", offset.x, offset.y + ts/2)
 			soldier.update(gameState.currentTurn, gameState.currentTime);
 		});
