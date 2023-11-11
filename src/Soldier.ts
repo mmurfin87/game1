@@ -14,7 +14,8 @@ export class Soldier
 		public player: Player,
 		public moves: number,
 		public health: number,
-		public movesLeft: number = moves)
+		public movesLeft: number = moves,
+		public healthLeft: number = health)
 	{
 	}
 

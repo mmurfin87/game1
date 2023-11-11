@@ -59,9 +59,9 @@ export class GameState
 					let terrain: Terrain = Terrain.GRASSLAND;
 					if (rand < 0.55)
 						terrain = Terrain.GRASSLAND;
-					else if (rand < 0.8)
+					else if (rand < 0.85)
 						terrain = Terrain.FOREST;
-					else if (rand < 0.9)
+					else if (rand < 0.95)
 						terrain = Terrain.MOUNTAINS;
 					else
 						terrain = Terrain.WATER;
@@ -71,7 +71,7 @@ export class GameState
 						if (this.cities.some(city => Math.abs(city.row - row) < 3 && Math.abs(city.col - col) < 3))
 							continue;
 						this.map[row * this.numRows + col].terrain = Terrain.GRASSLAND;	// make sure city is on a traversible ground
-						this.cities.push(new City(row, col, this.barbarianPlayer, 1));
+						this.cities.push(new City(row, col, this.barbarianPlayer, 1, 10, 1, 10));
 					}
 				}
 			}

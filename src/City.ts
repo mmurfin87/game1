@@ -10,7 +10,9 @@ export class City
 		public col: number,
 		public player: Player,
 		public moves: number,
-		public movesLeft: number = moves) 
+		public health: number,
+		public movesLeft: number = moves,
+		public healthLeft:number = health) 
 	{
     }
 

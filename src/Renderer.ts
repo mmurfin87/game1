@@ -61,12 +61,13 @@ export class Renderer
 	public readonly debug: DebugObject[] = [];
 
 	private readonly isoTilePath: Path2D;
-	private readonly grasslands = loadimage("http://localhost:8080/isograss.png");
-	private readonly forest = loadimage("http://localhost:8080/isoforest.png");
-	private readonly mountains = loadimage("http://localhost:8080/isomountain.png");
-	private readonly water = loadimage("http://localhost:8080/isowater.png");
-	private readonly soldier = loadimage("http://localhost:8080/soldier.png");
-	private readonly city = loadimage("http://localhost:8080/city.png");
+	private readonly terrainImage: Map<Terrain, {color: string, image: HTMLImageElement}> = new Map();
+	private readonly grasslands = loadimage("/isograss.png");
+	private readonly forest = loadimage("/isoforest.png");
+	private readonly mountains = loadimage("/isomountain.png");
+	private readonly water = loadimage("/isowater.png");
+	private readonly soldier = loadimage("/soldier.png");
+	private readonly city = loadimage("/city.png");
 	private finalRenderImage: ImageData | null = null;
 
 	constructor(
@@ -86,6 +87,12 @@ export class Renderer
 		this.isoTilePath.lineTo(ox, oy + tileSize);
 		this.isoTilePath.lineTo(ox - tileSize, oy + tileSize/2);
 		this.isoTilePath.closePath();
+
+		this.terrainImage = new Map();
+		this.terrainImage.set(Terrain.GRASSLAND, {color: 'green', image: this.grasslands});
+		this.terrainImage.set(Terrain.FOREST, {color: 'darkgreen', image: this.forest});
+		this.terrainImage.set(Terrain.MOUNTAINS, {color: 'gray', image: this.mountains});
+		this.terrainImage.set(Terrain.WATER, {color: 'blue', image: this.water});
 	}
 
 	private renderVictory(): void
@@ -193,48 +200,13 @@ export class Renderer
 				const offset = this.gridToScreenCoords(new Point2d(c, r));
 				this.ctx.save();
 				this.ctx.translate(offset.x, offset.y);
-				switch (gameState.map[r * gameState.numRows + c].terrain)
+				const renderable = this.terrainImage.get(gameState.tileAtCoords(c, r).terrain);
+				if (renderable?.image.complete)
+					this.ctx.drawImage(renderable.image, 0, 0, renderable.image.width, renderable.image.height, -ts, 0, ts*2, ts);
+				else
 				{
-					case Terrain.GRASSLAND:
-						if (this.grasslands.complete)
-							this.ctx.drawImage(this.grasslands, 0, 0, this.grasslands.width, this.grasslands.height, -ts, 0, ts*2, ts);
-						else
-						{
-							this.ctx.fillStyle = "green";
-							this.ctx.fill(this.isoTilePath);
-						}
-						break;
-					case Terrain.FOREST:
-						if (this.forest.complete)
-							this.ctx.drawImage(this.forest, 0, 0, this.forest.width, this.forest.height, -ts, 0, ts*2, ts);
-						else
-						{
-							this.ctx.fillStyle = "darkgreen";
-							this.ctx.fill(this.isoTilePath);
-						}
-						break;
-					case Terrain.MOUNTAINS:
-						if (this.mountains.complete)
-							this.ctx.drawImage(this.mountains, 0, 0, this.mountains.width, this.mountains.height, -ts, 0, ts*2, ts);
-						else
-						{
-							this.ctx.fillStyle = "gray";
-							this.ctx.fill(this.isoTilePath);
-						}
-						break;
-					case Terrain.WATER:
-						if (this.mountains.complete)
-							this.ctx.drawImage(this.water, 0, 0, this.water.width, this.water.height, -ts, 0, ts*2, ts);
-						else
-						{
-							this.ctx.fillStyle = "blue";
-							this.ctx.fill(this.isoTilePath);
-						}
-						break;
-					default:
-						this.ctx.fillStyle = "red";
-						this.ctx.fill(this.isoTilePath);
-						break;
+					this.ctx.fillStyle = renderable?.color ?? 'red';
+					this.ctx.fill(this.isoTilePath);
 				}
 				this.ctx.restore();
 			}
@@ -252,11 +224,7 @@ export class Renderer
 				this.ctx.fillStyle = 'yellow';
 				this.ctx.fill(this.isoTilePath);
 			}
-			
-			this.ctx.fillStyle = city.player.color;
-			const ownerbarXo = -ts/2, ownerbarYo = -hts/2
-			this.ctx.fillRect(ownerbarXo, ownerbarYo, ts, ownerBarHeight);
-			this.drawTextCenteredOn(''+city.player.id, 12, "black", 0, ownerbarYo+4);
+			this.drawColorTextBox(new Point2d(-ts/2, ts), ts, ownerBarHeight, city.player.color, 12, 'black', ''+city.healthLeft);
 			this.ctx.restore();
 		});
 
@@ -270,9 +238,7 @@ export class Renderer
 				this.ctx.fillStyle = 'black';
 				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
 			}
-			this.ctx.fillStyle = soldier.player.color;
-			this.ctx.fillRect(offset.x - ts/4, offset.y - hts, hts, ownerBarHeight);
-			this.drawTextCenteredOn(''+soldier.player.id, 12, "white", offset.x, offset.y + ts/2)
+			this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, soldier.player.color, 12, 'white', ''+soldier.healthLeft);
 			soldier.update(gameState.currentTurn, gameState.currentTime);
 		});
 
@@ -316,14 +282,26 @@ export class Renderer
 	{
 		return this.camera.gridToScreenCoords(coords);
 	}
+
+	private drawColorTextBox(origin: Point2d, width: number, height: number, boxColor: string, fontSize: number, fontColor: string, text: string)
+	{
+		this.ctx.fillStyle = boxColor;
+		this.ctx.fillRect(origin.x, origin.y, width, height);
+		this.ctx.fillStyle = fontColor;
+		this.ctx.font = fontSize + 'px Arial';
+		const metrics: TextMetrics = this.ctx.measureText(text);
+		const actualHeight = metrics.actualBoundingBoxAscent  - metrics.actualBoundingBoxDescent, diffHeight = height - actualHeight, offsetHeight = diffHeight / 2;
+		this.ctx.fillText(text, origin.x+width/2-(metrics.width/2), origin.y + actualHeight + offsetHeight);
+	}
 }
 
 function drawTextCenteredOn(ctx: CanvasRenderingContext2D, text: string, fontSize: number, color: string, x: number, y: number)
 {
 	ctx.fillStyle = color;
 	ctx.font = fontSize + 'px Arial';
-	const width = ctx.measureText(text).width;
-	ctx.fillText(text, x-(width/2), y+fontSize/2);
+	const metrics: TextMetrics = ctx.measureText(text);
+	const actualHeight = metrics.actualBoundingBoxAscent  - metrics.actualBoundingBoxDescent;
+	ctx.fillText(text, x-(metrics.width/2), y + actualHeight);//+fontSize/2);
 }
 
 // Function to generate a random number within a range

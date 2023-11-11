@@ -33,7 +33,7 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d): Poin
 		if (!current)
 			continue;
 
-		console.log(`Examining ${current}`);
+		//console.log(`Examining ${current}`);
 
 		if (Point2d.equivalent(current.pos, goal))
 			return reconstruct_path(visited, current);
@@ -52,7 +52,7 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d): Poin
 			if (node == undefined)  // Discover a new node
 			{
 				node = new Node(neighbor, 0, 0, null);
-				console.log(`Pushing ${neighbor}:${tentative_gScore} to ${openSet} | ${visited}`);
+				//console.log(`Pushing ${neighbor}:${tentative_gScore} to ${openSet} | ${visited}`);
 				openSet.push(node);
 			}
 			else if (tentative_gScore >= node.scoreTo)
@@ -97,12 +97,12 @@ function neighbors(gameState: GameState, node: Node): Point2d[]
 function reconstruct_path(visited: Node[], current: Node)
 {
 	const total_path: Point2d[] = [ current.pos ];
-	console.log(`Reconstructing path: ${total_path}`);
+	//console.log(`Reconstructing path: ${total_path}`);
 	while (current.cameFrom != null)
 	{
 		current = current.cameFrom;
 		total_path.push(current.pos);
-		console.log(`Reconstructing path: ${total_path}`);
+		//console.log(`Reconstructing path: ${total_path}`);
 	}
 	return total_path.reverse();
 }

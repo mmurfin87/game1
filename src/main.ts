@@ -11,13 +11,18 @@ import { Tile, Terrain } from "./Tile.js";
 import { Action } from "./actions/Action.js";
 import { AttackSoldierAction } from "./actions/AttackSoldierAction.js";
 import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
+import { HealAction } from "./actions/HealAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight - (canvas.nextElementSibling as HTMLElement).offsetHeight;
+const tileSize = 50;
+const dim = Math.min(Math.floor(canvas.width / tileSize), Math.floor(canvas.height / tileSize));
 
 const gameState: GameState = (() => {
-	const numRows = 20, numCols = 20;
+	const numRows = dim, numCols = dim;
 	const barbarianPlayer = new Player(0, 'white');
 	const humanPlayer = new Player(1, 'turquoise');
 	return new GameState(
@@ -35,7 +40,6 @@ const gameState: GameState = (() => {
 	);
 })();
 
-const tileSize = 50;//Math.min(canvas.height / gameState.numRows, canvas.width / gameState.numCols);
 const camera: Camera = new Camera(0, 0, canvas.width, canvas.height, 1.0, tileSize);
 
 const renderer: Renderer = (() => {
@@ -57,12 +61,9 @@ function gameLoop()
 	requestAnimationFrame(gameLoop);
 }
 
-const instawin = element("button", { "type": "button" }, "Insta-Win");
-instawin.addEventListener("click", () => gameState.cities.forEach(city => city.player = gameState.humanPlayer));
-(document.getElementById("actions") as HTMLElement).insertBefore(instawin, document.getElementById("unit-actions") as HTMLElement);//appendChild(instawin);
-
 // Call the function to generate random cities
 gameState.generateRandomCities();
+camera.centerOnGrid(gameState.cities.filter(c => c.player == gameState.humanPlayer)[0].position());
 
 // Start the game loop
 requestAnimationFrame(gameLoop);
@@ -129,7 +130,7 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 	if (drag)
 		return;
 	const coords = renderer.screenToGridCoords(e.offsetX, e.offsetY);
-	console.log(`Clicked (${e.offsetX},${e.offsetY}) [${camera.x},${camera.y}] => ${coords}`);
+	//console.log(`Clicked (${e.offsetX},${e.offsetY}) [${camera.x},${camera.y}] => ${coords}`);
 	//renderer.debug.push(new DebugObject(new Point2d(e.offsetX, e.offsetY), 2, 2, null));
 	//renderer.debug.push(new DebugObject(renderer.gridToScreenCoords(coords), 2, 2, null));
 	//renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(coords), 2));
@@ -158,10 +159,10 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 });
 
 renderer.canvas.addEventListener("wheel", (e: WheelEvent) => {
-	const dscale = Math.max(-0.1, Math.min(0.1, e.deltaY * 0.001));
+	const dscale = Math.max(-0.1, Math.min(0.1, e.deltaY * -0.001));
 	const oldscale = camera.scale;
 	camera.scale = Math.min(1.5, Math.max(0.6, camera.scale + dscale));
-	console.log(`Scroll: ${e.deltaY} -> ${dscale} => ${camera.scale}`);
+	//console.log(`Scroll: ${e.deltaY} -> ${dscale} => ${camera.scale}`);
 	const dwidth = camera.width * (camera.scale - oldscale), dheight = camera.height * (camera.scale - oldscale);
 	const percentX = e.offsetX / camera.width;
 	const percentY = e.offsetY / camera.height;
@@ -199,7 +200,7 @@ renderer.canvas.addEventListener("mouseleave", (e: MouseEvent) => {
 })
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
-	gameState.soldiers.forEach(soldier => soldier.nextTurn(gameState.currentTurn, gameState.currentTime));
+	gameState.soldiers.filter(soldier => soldier.player == gameState.humanPlayer).forEach(soldier => soldier.nextTurn(gameState.currentTurn, gameState.currentTime));
 	console.log('Next Turn');
 	gameState.cleanupDefeatedPlayers();
 	aiThink();
@@ -250,6 +251,8 @@ function calculateActions(player: Player, selection: Positioned): ActionOption[]
 		case "Soldier":
 			if (selection.movesLeft > 0)
 			{
+				if (selection.healthLeft < selection.health)
+					actions.push(new ActionOption("Heal", () => new HealAction(selection).execute()));
 				actions.push(new ActionOption("Move", () => { moveAction = (p: Point2d) => new TargetMoveAction(selection, p, gameState); }));
 				const settlement: City | undefined = gameState.search(selection.row, selection.col).find(pos => pos.type == "City" && pos.player != player) as City | undefined;
 				if (settlement)
@@ -376,7 +379,14 @@ function aiThink()
 						continue;
 					}
 					console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
-					moveAction(nearestTarget.position()).execute();
+					try
+					{
+						moveAction(nearestTarget.position()).execute();
+					}
+					catch (error)
+					{
+						console.log(`Caught error trying to execute ${action.name}`, error);
+					}
 					moveAction = null;
 					targets.push(nearestTarget);
 					console.log(`moveAction cleared: ${moveAction}`);
@@ -384,5 +394,6 @@ function aiThink()
 				break;
 			}
 		}
+		gameState.soldiers.filter(soldier => soldier.player == player).forEach(soldier => soldier.nextTurn(gameState.currentTurn, gameState.currentTime));
 	}
 }

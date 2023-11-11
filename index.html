@@ -3,14 +3,26 @@
 <head>
 	<title>Game1</title>
 	<style>
+		:root
+		{
+			color-scheme: light dark;
+		}
+
+		body
+		{
+			margin: 0;
+			display: flex;
+			flex-direction: column;
+		}
+
         canvas
 		{
-            border: 1px solid black;
+            
         }
     </style>
 </head>
 <body>
-	<canvas id="gameCanvas" width="500" height="500"></canvas>
+	<canvas id="gameCanvas" width="750" height="750"></canvas>
 	<div id="actions">
 		<button type="button" id="nextTurn">Next Turn</button>
 		<span id="unit-actions"></span>
