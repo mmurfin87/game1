@@ -35,40 +35,38 @@ export class Point2d
         return Math.max(Math.abs(target.x - this.x), Math.abs(target.y - this.y));
     }
 
+    clone(): Point2d
+    {
+        return new Point2d(this.x, this.y);
+    }
+
+    add(target: Point2d): Point2d
+    {
+        this.x += target.x;
+        this.y += target.y;
+        return this;
+    }
+
+    subtract(target: Point2d): Point2d
+    {
+        this.x -= target.x;
+        this.y -= target.y;
+        return this;
+    }
+
     unit(): Point2d
     {
-        const p = new Point2d(0, 0);
-        const distance = p.distanceTo(this);
-        p.x = this.x / distance;
-        p.y = this.y / distance;
-        return p;
+        const distance = Point2d.origin().distanceTo(this);
+        this.x /= distance;
+        this.y /= distance;
+        return this;
     }
 
     scale(scale: number): Point2d
     {
-        this.x /= scale;
-        this.y /= scale;
+        this.x *= scale;
+        this.y *= scale;
         return this;
-    }
-
-    stepScale(stepSize: number): Point2d
-    {console.log(`${this.x} / ${stepSize} = ${Math.floor(this.x/stepSize)} | ${this.y} / ${stepSize} = ${Math.floor(this.y/stepSize)}`);
-        this.x = Math.floor(this.x / stepSize);
-        this.y = Math.floor(this.y / stepSize);
-        return this;
-    }
-
-    steps(stepSize: number, target: Point2d): number
-    {
-        let stepCount = 0;
-        let origin = this;
-        const stepSizeSqr = Math.pow(stepSize, 2);
-        while (origin.distanceSqrTo(target) > stepSizeSqr)
-        {
-
-            stepCount++;
-        }
-        return stepCount;
     }
 
     toString(): string

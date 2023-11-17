@@ -1,6 +1,8 @@
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 
+const moveTime = 500;
+
 export class Soldier
 {
 	public readonly type = "Soldier";
@@ -24,6 +26,16 @@ export class Soldier
 		return new Point2d(this.col, this.row);
 	}
 
+	destination(): Point2d | null
+	{
+		return this.path && this.path.length > 1 ? this.path[1] : null;
+	}
+
+	moveCompletionPercent(currentTime: number): number
+	{
+		return this.movesLeft > 0 && this.moveStartTime ? (currentTime - this.moveStartTime) / moveTime : 0.0;
+	}
+
 	move(currentTurn: number, currentTime: number, path: Point2d[]): boolean
 	{
 		if (path.length < 2)
@@ -38,9 +50,9 @@ export class Soldier
 		}
 		this.path = path;
 		this.moveStartTurn = currentTurn;
-		this.moveStartTime = currentTime - 500;
+		this.moveStartTime = currentTime;
 		console.log(`Moving (${this.row},${this.col}) to ${this.path[this.path.length-1]}`);
-		this.followPathWhileAble(currentTime);
+		//this.followPathWhileAble(currentTime);
 		return true;
 	}
 
@@ -57,12 +69,14 @@ export class Soldier
 
 	update(currentTurn: number, currentTime: number): void
 	{
-		if (currentTurn === this.moveStartTurn)
+		//if (currentTurn === this.moveStartTurn)
 			this.animateMove(currentTime);
 	}
 
 	nextTurn(currentTurn: number, currentTime: number): void
 	{
+		if (this.path && this.moveStartTime && this.moveStartTime >= 500)
+			this.moveStartTime = currentTime;
 		this.animateMove(currentTime);
 	}
 
@@ -99,7 +113,7 @@ export class Soldier
 				this.moveStartTime = null;
 				console.log(`Arrived (${this.row},${this.col})`);
 			}
-			else if (this.moveStartTime != null && currentTime - this.moveStartTime >= 500)
+			else if (this.moveStartTime != null && currentTime - this.moveStartTime >= moveTime)
 			{
 				this.followPathWhileAble(currentTime);
 			}

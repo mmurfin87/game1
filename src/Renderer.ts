@@ -230,7 +230,24 @@ export class Renderer
 
 		// Draw soldiers
 		gameState.soldiers.forEach(soldier => {
-			const offset = this.gridToScreenCoords(soldier.position());
+			let offset = this.gridToScreenCoords(soldier.position());
+			let dest = soldier.destination();
+			if (dest)
+			{
+				dest = this.gridToScreenCoords(dest);
+				let scale = soldier.moveCompletionPercent(gameState.currentTime);
+				let dist = offset.distanceTo(dest);
+				const dv = dest
+					.subtract(offset)
+					.unit()
+				//	.scale(soldier.moveCompletionPercent(gameState.currentTime) * offset.distanceTo(dest));
+					.scale(scale * dist);
+				//if (soldier.player == gameState.humanPlayer)
+				//	console.log(`Animating: ${gameState.currentTime} | ${scale} * ${dist} = ${scale * dist} | (${dv.x},${dv.y})`);
+				offset.x += dv.x;
+				offset.y += dv.y;
+			}
+
 			if (this.soldier.complete)
 				this.ctx.drawImage(this.soldier, 0, 0, this.soldier.width, this.soldier.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
 			else
