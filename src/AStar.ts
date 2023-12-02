@@ -18,8 +18,21 @@ class Node
 	}
 }
 
-export function aStar(gameState: GameState, start: Point2d, goal: Point2d): Point2d[]
+/**
+ * 
+ * @param gameState 
+ * @param start 
+ * @param goal 
+ * @param stepsRequested The maximum number of steps to return. Must be positive.
+ * @returns the path, in order of nodes from start to goal, excluding start, including goal; null if no path possible
+ */
+export function aStar(gameState: GameState, start: Point2d, goal: Point2d, stepsRequested: number): Point2d[] | null
 {
+	if (stepsRequested < 1)
+		throw new Error("stepsRequested must be positive");
+	if (gameState.tileAtCoords(goal.x, goal.y).occupant != null)
+		return null;
+
 	// The set of nodes already evaluated
 	const visited: Node[] = [];	// visited
 
@@ -36,7 +49,7 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d): Poin
 		//console.log(`Examining ${current}`);
 
 		if (Point2d.equivalent(current.pos, goal))
-			return reconstruct_path(visited, current);
+			return reconstruct_path(visited, current, stepsRequested);
 
 		visited.push(current);
 
@@ -94,7 +107,7 @@ function neighbors(gameState: GameState, node: Node): Point2d[]
 	return result;
 }
 
-function reconstruct_path(visited: Node[], current: Node)
+function reconstruct_path(visited: Node[], current: Node, stepsRequested: number): Point2d[]
 {
 	const total_path: Point2d[] = [ current.pos ];
 	//console.log(`Reconstructing path: ${total_path}`);
@@ -104,5 +117,5 @@ function reconstruct_path(visited: Node[], current: Node)
 		total_path.push(current.pos);
 		//console.log(`Reconstructing path: ${total_path}`);
 	}
-	return total_path.reverse();
+	return total_path.reverse().splice(1, stepsRequested);
 }

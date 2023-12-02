@@ -1,3 +1,4 @@
+import { GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 
@@ -21,14 +22,29 @@ export class Soldier
 	{
 	}
 
-	position(): Point2d
+	locate(): Point2d
 	{
 		return new Point2d(this.col, this.row);
 	}
 
+	position(gameState: GameState, target: Point2d): boolean
+	{
+		let tile = gameState.tileAtCoords(this.col, this.row);
+		tile.occupant = null;
+		
+		tile = gameState.tileAtCoords(target.x, target.y);
+		if (tile.occupant != null)
+			return false;
+		tile.occupant = this;
+
+		this.col = target.x;
+		this.row = target.y;
+		return true;
+	}
+
 	destination(): Point2d | null
 	{
-		return this.path && this.path.length > 1 ? this.path[1] : null;
+		return this.path && this.path.length > 0 ? this.path[0] : null;
 	}
 
 	moveCompletionPercent(currentTime: number): number
@@ -38,26 +54,20 @@ export class Soldier
 
 	move(currentTurn: number, currentTime: number, path: Point2d[]): boolean
 	{
-		if (path.length < 2)
+		if (path.length < 1)
 		{
 			console.log(`path is too short: ${path.length}`);
-			return false;
-		}
-		if (path[0].x != this.col || path[0].y != this.row)
-		{
-			console.log(`path must begin at current location ${this.position()} but was given as ${path[0]}`);
 			return false;
 		}
 		this.path = path;
 		this.moveStartTurn = currentTurn;
 		this.moveStartTime = currentTime;
 		console.log(`Moving (${this.row},${this.col}) to ${this.path[this.path.length-1]}`);
-		//this.followPathWhileAble(currentTime);
 		return true;
 	}
 
 	moveTo(currentTurn: number, currentTime: number, target: Point2d): boolean {
-		return this.move(currentTurn, currentTime, [this.position(), target]);
+		return this.move(currentTurn, currentTime, [this.locate(), target]);
 	}
 
 	stop(): void
@@ -65,58 +75,57 @@ export class Soldier
 		this.path = null;
 		this.moveStartTime = null;
 		this.moveStartTurn = null;
+		console.log(`Arrived (${this.row},${this.col})`);
 	}
 
-	update(currentTurn: number, currentTime: number): void
+	update(gameState: GameState): void
 	{
 		//if (currentTurn === this.moveStartTurn)
-			this.animateMove(currentTime);
+			this.followPathWhileAble(gameState);
 	}
 
-	nextTurn(currentTurn: number, currentTime: number): void
+	nextTurn(gameState: GameState): void
 	{
 		if (this.path && this.moveStartTime && this.moveStartTime >= 500)
-			this.moveStartTime = currentTime;
-		this.animateMove(currentTime);
+			this.moveStartTime = gameState.currentTime;
+		this.followPathWhileAble(gameState);
 	}
 
-	private followPathWhileAble(currentTime: number): void
+	private followPathWhileAble(gameState: GameState): void
 	{
 		if (this.path == null)
 			return;
-		let i = 1;
-		if (i < this.path.length)
+		else if (this.moveStartTime != null && gameState.currentTime - this.moveStartTime >= moveTime)
 		{
-			const steps = this.path[i-1].stepsTo(this.path[i]);
-			if (steps <= this.movesLeft)
+			let i = 0;
+			if (i < this.path.length)
 			{
-				this.col = this.path[i].x;
-				this.row = this.path[i].y;
-				this.movesLeft -= steps;
-				this.moveStartTime = currentTime;
-				this.path.shift();
-			}
-		}
-		else
-			this.stop();
-	}
+				const steps = this.locate().stepsTo(this.path[i]);
+				if (steps <= this.movesLeft)
+				{
+					if (!this.position(gameState, this.path[i]))
+					{
+						console.log(`Collision: (${this.path[i].x},${this.path[i].y}) already occupied by ${gameState.tileAtCoords(this.path[i].x, this.path[i].y).occupant}`);
+						this.stop();
+						return;
+					}
+					this.movesLeft -= steps;
+					this.moveStartTime = gameState.currentTime;
+					this.path.shift();
+				}
 
-	private animateMove(currentTime: number): void
-	{
-		if (!this.path)
-			return; // No target to move to
-		else
-		{			
-			if (this.row == this.path[this.path.length-1].y && this.col == this.path[this.path.length-1].x)
-			{
-				this.path = null;
-				this.moveStartTime = null;
-				console.log(`Arrived (${this.row},${this.col})`);
+				if (this.path.length == 0)
+					this.stop();
 			}
-			else if (this.moveStartTime != null && currentTime - this.moveStartTime >= moveTime)
-			{
-				this.followPathWhileAble(currentTime);
-			}
+			else
+				this.stop();
 		}
+/*
+		if (this.row == this.path[this.path.length-1].y && this.col == this.path[this.path.length-1].x)
+		{
+			this.path = null;
+			this.moveStartTime = null;
+		}
+		*/
 	}
 }

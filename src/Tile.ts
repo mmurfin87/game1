@@ -1,3 +1,5 @@
+import { Soldier } from "./Soldier.js";
+
 export enum Terrain
 {
 	GRASSLAND = "Grassland",
@@ -9,7 +11,8 @@ export enum Terrain
 export class Tile
 {
 	constructor(
-		public terrain: Terrain
+		public terrain: Terrain,
+		public occupant: Soldier | null = null
 	)
 	{}
 }

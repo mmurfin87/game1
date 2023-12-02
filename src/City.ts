@@ -16,7 +16,7 @@ export class City
 	{
     }
 
-	position(): Point2d
+	locate(): Point2d
 	{
 		return new Point2d(this.col, this.row);
 	}

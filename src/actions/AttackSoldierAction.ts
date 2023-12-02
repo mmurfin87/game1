@@ -13,14 +13,15 @@ export class AttackSoldierAction implements Action
 
 	execute(): void
 	{
-		const distance = this.attacker.position().stepsTo(this.defender.position());
+		const distance = this.attacker.locate().stepsTo(this.defender.locate());
 		if (this.attacker.movesLeft < distance)
 			throw new Error("Not enough moves to attack");
 		this.defender.healthLeft -= 5;
-		this.attacker.healthLeft -= 6
-		console.log(`Attacked defender at ${this.defender.position()} which has ${this.defender.healthLeft} left`);
+		if (this.defender.healthLeft > 0)
+			this.attacker.healthLeft -= 6;
+		console.log(`Attacked defender at ${this.defender.locate()} which has ${this.defender.healthLeft} left`);
 		if (this.removeSoldierIfDead(this.defender) && this.gameState.search(this.defender.row, this.defender.col).length == 0)
-			this.attacker.moveTo(this.gameState.currentTurn, this.gameState.currentTime, this.defender.position());
+			this.attacker.moveTo(this.gameState.currentTurn, this.gameState.currentTime, this.defender.locate());
 		this.removeSoldierIfDead(this.attacker);
 		
 		this.attacker.movesLeft -= distance;

@@ -165,7 +165,7 @@ export class Renderer
 	// Function to draw the red circle around the selected city
 	drawSelection(position: Positioned, tileSize: number)
 	{
-		const offset = this.gridToScreenCoords(position.position());
+		const offset = this.gridToScreenCoords(position.locate());
 		this.ctx.strokeStyle = 'red';
 		this.ctx.lineWidth = 2;
 		this.ctx.beginPath();
@@ -214,7 +214,7 @@ export class Renderer
 	
 		// Draw cities
 		gameState.cities.forEach(city => {
-			const offset = this.gridToScreenCoords(city.position());
+			const offset = this.gridToScreenCoords(city.locate());
 			this.ctx.save();
 			this.ctx.translate(offset.x, offset.y);
 			if (this.city.complete)
@@ -230,7 +230,7 @@ export class Renderer
 
 		// Draw soldiers
 		gameState.soldiers.forEach(soldier => {
-			let offset = this.gridToScreenCoords(soldier.position());
+			let offset = this.gridToScreenCoords(soldier.locate());
 			let dest = soldier.destination();
 			if (dest)
 			{
@@ -256,7 +256,7 @@ export class Renderer
 				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
 			}
 			this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, soldier.player.color, 12, 'white', ''+soldier.healthLeft);
-			soldier.update(gameState.currentTurn, gameState.currentTime);
+			soldier.update(gameState);
 		});
 
 		// Draw Soldier paths
@@ -264,7 +264,7 @@ export class Renderer
 			if (soldier.path == null)
 				return;
 			let last = null;
-			for (const step of soldier.path)
+			for (const step of [soldier.locate(), ...soldier.path])
 			{
 				const p = this.gridToScreenCoords(step);
 				this.ctx.beginPath();

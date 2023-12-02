@@ -18,7 +18,10 @@ export class TargetMoveAction implements Action
 
     execute(): void
     {
-        const path = aStar(this.gameState, this.selection.position(), this.coords);
-        this.selection.move(this.gameState.currentTurn, this.gameState.currentTime, path);
+        const path = aStar(this.gameState, this.selection.locate(), this.coords, this.selection.movesLeft);
+        if (path)
+            this.selection.move(this.gameState.currentTurn, this.gameState.currentTime, path);
+        else
+            console.log(`No path possible from ${this.selection.locate()} to ${this.coords}`);
     }
 }

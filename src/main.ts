@@ -63,7 +63,7 @@ function gameLoop()
 
 // Call the function to generate random cities
 gameState.generateRandomCities();
-camera.centerOnGrid(gameState.cities.filter(c => c.player == gameState.humanPlayer)[0].position());
+camera.centerOnGrid(gameState.cities.filter(c => c.player == gameState.humanPlayer)[0].locate());
 
 // Start the game loop
 requestAnimationFrame(gameLoop);
@@ -94,9 +94,11 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 			const targetTerrain: Terrain = gameState.map[target.y * gameState.numRows + target.x].terrain;
 			if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
 				console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
-			else if (distanceToTarget <= soldier.movesLeft)
+			//else if (distanceToTarget <= soldier.movesLeft)
+			else if (soldier.movesLeft > 0)
 			{
-				const occupant = gameState.soldiers.find(s => s.col == target.x && s.row == target.y && s.type == "Soldier");
+				//const occupant = gameState.soldiers.find(s => s.col == target.x && s.row == target.y && s.type == "Soldier");
+				const occupant: Soldier | null = gameState.tileAtCoords(target.x, target.y).occupant;
 				if (occupant)
 				{
 					if (occupant == soldier)
@@ -114,7 +116,7 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 			}
 			else
 			{
-				soldier.move(gameState.currentTurn, gameState.currentTime, aStar(gameState, origin, target));
+				//soldier.move(gameState.currentTurn, gameState.currentTime, aStar(gameState, origin, target, soldier.movesLeft));
 			}
 			
 			break;
@@ -200,7 +202,7 @@ renderer.canvas.addEventListener("mouseleave", (e: MouseEvent) => {
 })
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
-	gameState.soldiers.filter(soldier => soldier.player == gameState.humanPlayer).forEach(soldier => soldier.nextTurn(gameState.currentTurn, gameState.currentTime));
+	gameState.soldiers.filter(soldier => soldier.player == gameState.humanPlayer).forEach(soldier => soldier.nextTurn(gameState));
 	console.log('Next Turn');
 	gameState.cleanupDefeatedPlayers();
 	aiThink();
@@ -243,9 +245,9 @@ function calculateActions(player: Player, selection: Positioned): ActionOption[]
 	{
 		case "City":
 		{
-			const nearestEnemy = findNearestEnemyTarget(selection.player, selection.position(), []);
-			if (selection.movesLeft > 0 && (nearestEnemy == null || nearestEnemy.position().stepsTo(selection.position()) > 0))
-				actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(player, selection, gameState.soldiers).execute()));
+			const nearestEnemy = findNearestEnemyTarget(selection.player, selection.locate(), []);
+			if (selection.movesLeft > 0 && (nearestEnemy == null || nearestEnemy.locate().stepsTo(selection.locate()) > 0))
+				actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(gameState, player, selection).execute()));
 		}
 			break;
 		case "Soldier":
@@ -257,7 +259,7 @@ function calculateActions(player: Player, selection: Positioned): ActionOption[]
 				const settlement: City | undefined = gameState.search(selection.row, selection.col).find(pos => pos.type == "City" && pos.player != player) as City | undefined;
 				if (settlement)
 					actions.push(new ActionOption("Settle", () => new SettleAction(player, selection, settlement).execute()));
-				const enemiesInRange = findEnemiesInRange(player, selection.position(), 1).filter(e => e.type == "Soldier");
+				const enemiesInRange = findEnemiesInRange(player, selection.locate(), 1).filter(e => e.type == "Soldier");
 				if (enemiesInRange.length > 0)
 					actions.push(new ActionOption("Attack", () => { 
 						moveAction = (p: Point2d) => {
@@ -338,7 +340,7 @@ function findEnemiesInRange(player: Player, origin: Point2d, range: number): Pos
 {
 	const result: Positioned[] = [];
 	for (const pos of [...gameState.soldiers, ...gameState.cities])
-		if (pos.player != player && origin.stepsTo(pos.position()) <= range)
+		if (pos.player != player && origin.stepsTo(pos.locate()) <= range)
 			result.push(pos);
 	return result;
 }
@@ -381,7 +383,7 @@ function aiThink()
 					console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
 					try
 					{
-						moveAction(nearestTarget.position()).execute();
+						moveAction(nearestTarget.locate()).execute();
 					}
 					catch (error)
 					{
@@ -394,6 +396,6 @@ function aiThink()
 				break;
 			}
 		}
-		gameState.soldiers.filter(soldier => soldier.player == player).forEach(soldier => soldier.nextTurn(gameState.currentTurn, gameState.currentTime));
+		gameState.soldiers.filter(soldier => soldier.player == player).forEach(soldier => soldier.nextTurn(gameState));
 	}
 }
