@@ -264,7 +264,7 @@ export class Renderer
 			if (soldier.path == null)
 				return;
 			let last = null;
-			for (const step of [soldier.locate(), ...soldier.path])
+			for (const step of soldier.path)
 			{
 				const p = this.gridToScreenCoords(step);
 				this.ctx.beginPath();

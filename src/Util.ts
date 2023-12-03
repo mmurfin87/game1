@@ -19,3 +19,9 @@ export function testChance(probability: number): boolean
 {
 	return Math.random() < probability;
 }
+
+export function logReturn<T>(returnValue: T, ...messages: any[]): T
+{
+	console.log(...messages);
+	return returnValue;
+}

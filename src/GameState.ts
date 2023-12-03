@@ -32,6 +32,20 @@ export class GameState
 		return winner;
 	}
 
+	removeSoldier(soldier: Soldier): void
+	{
+		const index = this.soldiers.findIndex(e => e == soldier);
+		if (index < 0 || index > this.soldiers.length)
+			throw new Error("can't find soldier in gamestate soldiers list");
+		console.log(`Removing soldier from index ${index}`);
+		this.soldiers.splice(index, 1);
+		//const soldierTile = this.map.find(t => t.occupant == soldier);
+		//if (soldierTile)
+		//	soldierTile.occupant = null;
+		if (this.selection == soldier)
+			this.selection = null;
+	}
+
 
 	cleanupDefeatedPlayers()
 	{
@@ -92,42 +106,30 @@ export class GameState
 			this.cities[i].player = player;
 
 		}
-		//this.cities[0].player = this.humanPlayer;
-		//this.cities[this.cities.length-5].player = this.players[2];
-		//this.cities[this.cities.length-1].player = this.players[this.players.length-1];
 	}
 
-	select(gridCoords: Point2d, player:Player): Positioned | null
+	search(coords: Point2d): Positioned[]
 	{
-		for (const pos of this.search(gridCoords.y, gridCoords.x))
-			if (pos.player.id == player.id)
-				return pos;
-		return null;
-	}
-
-	target<T extends Positioned>(gridCoords: Point2d, player: Player, restrictType?: T['type']): T | null
-	{
-		for (const pos of this.search(gridCoords.y, gridCoords.x))
-		{
-			if (restrictType && pos.type !== restrictType)
-				break;
-			if (pos.type == "Soldier" && pos.player.id == player.id)	// can't stack soldiers
-				break;
-			console.log(`Selected ${pos.type} (${pos.row},${pos.col}`);
-			return pos as T;
-		}
-		return null;
-	}
-
-	search(row: number, col: number): Positioned[]
-	{
-		const result = [];
-		// Order soldiers first so they are selected over cities
-		for (const posArray of [this.soldiers, this.cities])
-			for (const pos of posArray)
-				if (row == pos.row && col == pos.col)
-					result.push(pos);
+		const result:Positioned[] = [];
+		this.searchArray(coords.x, coords.y, this.soldiers, result);
+		this.searchArray(coords.x, coords.y, this.cities, result);
 		return result;
+	}
+
+	searchCoords(row: number, col: number): Positioned[]
+	{
+		const result:Positioned[] = [];
+		// Order soldiers first so they are selected over cities
+		this.searchArray(col, row, this.soldiers, result);
+		this.searchArray(col, row, this.cities, result);
+		return result;
+	}
+
+	private searchArray(x: number, y: number, array: Positioned[], result: Positioned[]): void
+	{
+		for (const pos of array)
+			if (x == pos.col && y == pos.row)
+				result.push(pos);
 	}
 
 	tileAtPoint(coords: Point2d): Tile

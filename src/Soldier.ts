@@ -1,6 +1,7 @@
 import { GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
+import { logReturn } from "./Util.js";
 
 const moveTime = 500;
 
@@ -8,7 +9,6 @@ export class Soldier
 {
 	public readonly type = "Soldier";
 	public path: Point2d[] | null = null;
-	private moveStartTurn: number | null = null;
 	private moveStartTime: number | null = null;
 
 	constructor(
@@ -29,14 +29,13 @@ export class Soldier
 
 	position(gameState: GameState, target: Point2d): boolean
 	{
-		let tile = gameState.tileAtCoords(this.col, this.row);
-		tile.occupant = null;
-		
-		tile = gameState.tileAtCoords(target.x, target.y);
-		if (tile.occupant != null)
-			return false;
-		tile.occupant = this;
-
+		const collision = gameState.search(target).find(Soldier.isType);						
+		if (collision)
+			return logReturn(false, `Collision: (${target.x},${target.y}) already occupied.`, this, 'will collide with', collision);
+		//{
+		//	console.log("Collision:", target, "already occupied by", collision);
+		//	return false;
+		//}
 		this.col = target.x;
 		this.row = target.y;
 		return true;
@@ -44,7 +43,7 @@ export class Soldier
 
 	destination(): Point2d | null
 	{
-		return this.path && this.path.length > 0 ? this.path[0] : null;
+		return this.path && this.path.length > 1 ? this.path[1] : null;
 	}
 
 	moveCompletionPercent(currentTime: number): number
@@ -52,36 +51,37 @@ export class Soldier
 		return this.movesLeft > 0 && this.moveStartTime ? (currentTime - this.moveStartTime) / moveTime : 0.0;
 	}
 
-	move(currentTurn: number, currentTime: number, path: Point2d[]): boolean
+	/**
+	 * The path must always start at the soldier's current position
+	 * @param path 
+	 * @returns 
+	 */
+	move(path: Point2d[]): boolean
 	{
-		if (path.length < 1)
+		if (path.length < 2)
 		{
-			console.log(`path is too short: ${path.length}`);
+			console.log(`path is too short:`, path.length);
+			return false;
+		}
+		if (!Point2d.equivalent(this.locate(), path[0]))
+		{
+			console.log("path must start at origin", this.locate(), "but found", path[0]);
 			return false;
 		}
 		this.path = path;
-		this.moveStartTurn = currentTurn;
-		this.moveStartTime = currentTime;
 		console.log(`Moving (${this.row},${this.col}) to ${this.path[this.path.length-1]}`);
 		return true;
-	}
-
-	moveTo(currentTurn: number, currentTime: number, target: Point2d): boolean {
-		return this.move(currentTurn, currentTime, [this.locate(), target]);
 	}
 
 	stop(): void
 	{
 		this.path = null;
 		this.moveStartTime = null;
-		this.moveStartTurn = null;
-		console.log(`Arrived (${this.row},${this.col})`);
 	}
 
 	update(gameState: GameState): void
 	{
-		//if (currentTurn === this.moveStartTurn)
-			this.followPathWhileAble(gameState);
+		this.followPathWhileAble(gameState);
 	}
 
 	nextTurn(gameState: GameState): void
@@ -95,9 +95,20 @@ export class Soldier
 	{
 		if (this.path == null)
 			return;
+		else if (this.moveStartTime == null)
+		{
+			const nextCollision = gameState.search(this.path[1]).find(Soldier.isType);
+			if (nextCollision)
+			{
+				console.log("Will collide at:", this.path[1], "already occupied by", nextCollision);
+				this.stop();
+			}
+			else
+				this.moveStartTime = gameState.currentTime;
+		}
 		else if (this.moveStartTime != null && gameState.currentTime - this.moveStartTime >= moveTime)
 		{
-			let i = 0;
+			let i = 1;
 			if (i < this.path.length)
 			{
 				const steps = this.locate().stepsTo(this.path[i]);
@@ -105,7 +116,6 @@ export class Soldier
 				{
 					if (!this.position(gameState, this.path[i]))
 					{
-						console.log(`Collision: (${this.path[i].x},${this.path[i].y}) already occupied by ${gameState.tileAtCoords(this.path[i].x, this.path[i].y).occupant}`);
 						this.stop();
 						return;
 					}
@@ -114,18 +124,30 @@ export class Soldier
 					this.path.shift();
 				}
 
-				if (this.path.length == 0)
+				if (this.path.length < 2)
 					this.stop();
+				else
+				{
+					const nextCollision = gameState.search(this.path[1]).find(Soldier.isType);
+					if (nextCollision)
+					{
+						console.log("Will collide at:", this.path[1], "already occupied by", nextCollision);
+						this.stop();
+					}
+				}
 			}
 			else
 				this.stop();
 		}
-/*
-		if (this.row == this.path[this.path.length-1].y && this.col == this.path[this.path.length-1].x)
-		{
-			this.path = null;
-			this.moveStartTime = null;
-		}
-		*/
+	}
+
+	static isType(value: any): value is Soldier
+	{
+		return value.type == "Soldier";
+	}
+
+	toString(): string
+	{
+		return `Soldier{player=${this.player.id}, position=(${this.col},${this.row})}`;
 	}
 }

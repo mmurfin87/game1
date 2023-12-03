@@ -57,6 +57,8 @@ export class Point2d
     unit(): Point2d
     {
         const distance = Point2d.origin().distanceTo(this);
+        if (distance == 0)
+            return this;
         this.x /= distance;
         this.y /= distance;
         return this;

@@ -1,4 +1,4 @@
-import { aStar } from "./AStar.js";
+import { aStar, navigateNear } from "./AStar.js";
 import { Camera } from "./Camera.js";
 import { City } from "./City.js";
 import { GameState } from "./GameState.js";
@@ -70,13 +70,15 @@ requestAnimationFrame(gameLoop);
 
 // Handle right-click events to move soldiers
 renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
-	if (!gameState.selection)
-		return;
-
 	e.preventDefault(); // Prevent the default context menu
-	console.log("Right Click");
-	const clickX: number = e.offsetX;
-	const clickY: number = e.offsetY;
+	const target: Point2d = renderer.screenToGridCoords(e.offsetX, e.offsetY);
+
+	if (!gameState.selection)
+	{
+		gameState.search(target)
+			.forEach(pos => console.log(pos));
+		return;
+	}
 
 	switch (gameState.selection.type)
 	{
@@ -88,35 +90,31 @@ renderer.canvas.addEventListener('contextmenu', (e: MouseEvent) => {
 		{
 			const soldier: Soldier = gameState.selection as Soldier;
 			const origin: Point2d = new Point2d(gameState.selection.col, gameState.selection.row);
-			const target: Point2d = renderer.screenToGridCoords(clickX, clickY);//new Point2d(clickX, clickY).stepScale(gameState.tileSize);
 			const distanceToTarget = origin.stepsTo(target);
 			
 			const targetTerrain: Terrain = gameState.map[target.y * gameState.numRows + target.x].terrain;
 			if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
 				console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
-			//else if (distanceToTarget <= soldier.movesLeft)
-			else if (soldier.movesLeft > 0)
+			//else if (Point2d.equivalent(soldier.locate(), target))
+			//	soldier.stop();
+			else// if (soldier.movesLeft > 0)
 			{
-				//const occupant = gameState.soldiers.find(s => s.col == target.x && s.row == target.y && s.type == "Soldier");
-				const occupant: Soldier | null = gameState.tileAtCoords(target.x, target.y).occupant;
-				if (occupant)
+				const occupant: Soldier | undefined = gameState.search(target).find(Soldier.isType);
+				if (occupant && distanceToTarget < 2)
 				{
 					if (occupant == soldier)
 						soldier.stop();
 					else if (occupant.player == gameState.humanPlayer)
 						console.log(`Can't stack friendly units`);
-					else
+					else if (soldier.movesLeft > 0 && distanceToTarget == 1)
 						new AttackSoldierAction(soldier, occupant, gameState).execute();
 				}
 				else
 				{
-					console.log(`Target (${target.y},${target.x}) distance ${distanceToTarget} in range ${soldier.movesLeft}`);
-					new TargetMoveAction(soldier, target, gameState).execute();
+					const path = navigateNear(gameState, soldier.locate(), target);
+					if (path)
+						new TargetMoveAction(soldier, path).execute();
 				}
-			}
-			else
-			{
-				//soldier.move(gameState.currentTurn, gameState.currentTime, aStar(gameState, origin, target, soldier.movesLeft));
 			}
 			
 			break;
@@ -138,7 +136,6 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 	//renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(coords), 2));
 	if (moveAction)
 	{
-		console.log(`Captured Coordinates for Action: (${e.offsetX},${e.offsetY}) => (${coords.x},${coords.y})`);
 		try
 		{
 			moveAction(coords).execute();
@@ -154,7 +151,8 @@ renderer.canvas.addEventListener('click', (e: MouseEvent) => {
 		console.log(`moveAction cleared: ${moveAction}`);
 		return;
 	}
-	gameState.selection = gameState.select(coords, gameState.humanPlayer);
+	gameState.selection = gameState.search(coords)
+		.find(pos => pos.player.id == gameState.humanPlayer.id) ?? null;
 	//if (gameState.selection)
 	//	renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(gameState.selection.position()), 2));
 	resolvePlayerActions();
@@ -255,8 +253,16 @@ function calculateActions(player: Player, selection: Positioned): ActionOption[]
 			{
 				if (selection.healthLeft < selection.health)
 					actions.push(new ActionOption("Heal", () => new HealAction(selection).execute()));
-				actions.push(new ActionOption("Move", () => { moveAction = (p: Point2d) => new TargetMoveAction(selection, p, gameState); }));
-				const settlement: City | undefined = gameState.search(selection.row, selection.col).find(pos => pos.type == "City" && pos.player != player) as City | undefined;
+				actions.push(new ActionOption("Move", () => 
+				{ 
+					moveAction = (p: Point2d) => {
+						const path = navigateNear(gameState, selection.locate(), p);
+						if (path)
+							return new TargetMoveAction(selection, path);
+						return {execute() { console.log('NO ACTION'); }};	// TODO: this is pretty terrible
+					}; 
+				}));
+				const settlement: City | undefined = gameState.searchCoords(selection.row, selection.col).find(pos => pos.type == "City" && pos.player != player) as City | undefined;
 				if (settlement)
 					actions.push(new ActionOption("Settle", () => new SettleAction(player, selection, settlement).execute()));
 				const enemiesInRange = findEnemiesInRange(player, selection.locate(), 1).filter(e => e.type == "Soldier");
@@ -344,7 +350,7 @@ function findEnemiesInRange(player: Player, origin: Point2d, range: number): Pos
 			result.push(pos);
 	return result;
 }
-
+  
 function aiThink()
 {
 	for (const player of gameState.players)
@@ -354,48 +360,83 @@ function aiThink()
 		
 		let soldierCount = 0;
 		const targets: Positioned[] = [];
-		for (const pos of [...gameState.soldiers, ...gameState.cities])
-		{
-			if (pos.player != player)
-				continue;
-			if (pos.type == 'Soldier')
-				soldierCount++;
-			
-			const actionSorting = ["Move", "Attack", "Settle"];	// reverse sorted in increasing precedence
-			const actions: ActionOption[] = calculateActions(player, pos)
-				.filter(a => a.name != "Train Soldier" || soldierCount < 3)
-				.sort((a,b) => (actionSorting.indexOf(b.name) ) - (actionSorting.indexOf(a.name) ?? 1))
-			;
 
-			for (const action of actions)
+		// First, move all my soldiers to attack targets
+		for (const soldier of gameState.soldiers)
+		{
+			if (soldier.player != player)
+				continue;
+			soldierCount++;
+
+			if (soldier.movesLeft < 1)
+				continue;
+
+			const inCity: City | undefined = gameState.searchCoords(soldier.row, soldier.col)
+				.filter(p => p.player != player)
+				.filter(City.isType)
+				.find(p => p.row == soldier.row && p.col == soldier.col);
+			if (inCity)
 			{
-				console.log(`AI Executing ${action.name}`);
-				action.execute();
-				if ((action.name == "Move" || action.name == "Attack") && moveAction)
+				new SettleAction(player, soldier, inCity).execute();
+				continue;
+			}
+
+			const enemiesInRange = findEnemiesInRange(player, soldier.locate(), 1);
+			// Find the best nearby targets to attack
+			let targetCity: City | null = null, targetSoldier: Soldier | null = null;
+			for (const target of enemiesInRange)
+			{
+				if (targets.includes(target))
+					continue;
+				switch (target.type)
 				{
-					let origin: Point2d = new Point2d(pos.col, pos.row);
-					const nearestTarget = findNearestEnemyTarget(player, origin, targets);
-					if (nearestTarget == null)
-					{
-						console.log(`Identified nearest enemy target: null`);
-						continue;
-					}
-					console.log(`Identified nearest enemy target: ${nearestTarget.type} (${nearestTarget?.col},${nearestTarget?.row})`);
-					try
-					{
-						moveAction(nearestTarget.locate()).execute();
-					}
-					catch (error)
-					{
-						console.log(`Caught error trying to execute ${action.name}`, error);
-					}
-					moveAction = null;
-					targets.push(nearestTarget);
-					console.log(`moveAction cleared: ${moveAction}`);
+					case "City":
+						if (!gameState.searchCoords(target.row, target.col).find(Soldier.isType))
+							targetCity = target;
+						break;
+					case "Soldier":
+						if (targetSoldier == null)
+							targetSoldier = target;
+						else if (targetSoldier.healthLeft > target.health)
+							targetSoldier = target;
+						break;
 				}
-				break;
+			}
+			if (targetCity != null)
+			{
+				const path = navigateNear(gameState, soldier.locate(), targetCity.locate());
+				if (path)
+					new TargetMoveAction(soldier, path).execute();
+			}
+			else if (targetSoldier != null)
+				new AttackSoldierAction(soldier, targetSoldier, gameState).execute();
+			else if (soldier.healthLeft < soldier.health)
+				new HealAction(soldier).execute();
+			else
+			{
+				const target = findNearestEnemyTarget(player, soldier.locate(), targets);
+				console.log(`Identified nearest enemy target:`, target);
+				if (target)
+				{
+					const path = navigateNear(gameState, soldier.locate(), target.locate());
+					if (path)
+						new TargetMoveAction(soldier, path).execute();
+				}
 			}
 		}
+
+		for (const city of gameState.cities)
+		{
+			if (city.player != player)
+				continue;
+
+			if (city.movesLeft < 1)
+				continue;
+
+			if (soldierCount < 3 && !gameState.searchCoords(city.row, city.col).find(Soldier.isType))
+				new BuildSoldierAction(gameState, player, city).execute();
+		}
+
 		gameState.soldiers.filter(soldier => soldier.player == player).forEach(soldier => soldier.nextTurn(gameState));
 	}
 }

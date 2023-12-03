@@ -16,9 +16,11 @@ export class BuildSoldierAction implements Action
     {
 		if (this.selection.movesLeft < 1)
 			throw new Error("Not enough moves");
-		this.selection.movesLeft -= 1;
+		
 		const soldier = new Soldier(this.selection.row, this.selection.col, this.player, 2, 10, 0);
-		soldier.position(this.gameState, soldier.locate());
+		if (!soldier.position(this.gameState, soldier.locate()))
+			throw new Error(`Can't build soldier: Something already occupies ${soldier.locate()}`);
+		this.selection.movesLeft -= 1;
         this.gameState.soldiers.push(soldier);
     }
 }

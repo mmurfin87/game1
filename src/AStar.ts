@@ -1,5 +1,6 @@
 import { GameState } from "./GameState.js";
 import { Point2d } from "./Point2d.js";
+import { Soldier } from "./Soldier.js";
 import { Terrain } from "./Tile.js";
 
 class Node
@@ -18,6 +19,16 @@ class Node
 	}
 }
 
+export function navigateNear(gameState: GameState, start: Point2d, goal: Point2d): Point2d[] | null
+{
+	const path = aStar(gameState, start, goal);
+	if (path == null)
+		return path;
+	let i = path.length - 1;
+	for (; i >= 0 && gameState.search(path[i]).find(Soldier.isType); i--);
+	return path.slice(0, i + 1);
+}
+
 /**
  * 
  * @param gameState 
@@ -26,12 +37,10 @@ class Node
  * @param stepsRequested The maximum number of steps to return. Must be positive.
  * @returns the path, in order of nodes from start to goal, excluding start, including goal; null if no path possible
  */
-export function aStar(gameState: GameState, start: Point2d, goal: Point2d, stepsRequested: number): Point2d[] | null
+export function aStar(gameState: GameState, start: Point2d, goal: Point2d, stepsRequested?: number): Point2d[] | null
 {
-	if (stepsRequested < 1)
+	if (stepsRequested ?? 1 < 1)
 		throw new Error("stepsRequested must be positive");
-	if (gameState.tileAtCoords(goal.x, goal.y).occupant != null)
-		return null;
 
 	// The set of nodes already evaluated
 	const visited: Node[] = [];	// visited
@@ -46,8 +55,6 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d, steps
 		if (!current)
 			continue;
 
-		//console.log(`Examining ${current}`);
-
 		if (Point2d.equivalent(current.pos, goal))
 			return reconstruct_path(visited, current, stepsRequested);
 
@@ -57,6 +64,8 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d, steps
 		{
 			if (visited.some(n => Point2d.equivalent(n.pos, neighbor)))
 				continue;  // Ignore the neighbor which is already evaluated
+			if (!Point2d.equivalent(goal, neighbor) && gameState.search(neighbor).find(Soldier.isType))
+				continue;	// Ignore currently occupied neighbors unless it's the goal
 
 			// The distance from start to a neighbor
 			const tentative_gScore = current.scoreTo + distance_heuristic(current.pos, neighbor);
@@ -65,7 +74,6 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d, steps
 			if (node == undefined)  // Discover a new node
 			{
 				node = new Node(neighbor, 0, 0, null);
-				//console.log(`Pushing ${neighbor}:${tentative_gScore} to ${openSet} | ${visited}`);
 				openSet.push(node);
 			}
 			else if (tentative_gScore >= node.scoreTo)
@@ -107,7 +115,7 @@ function neighbors(gameState: GameState, node: Node): Point2d[]
 	return result;
 }
 
-function reconstruct_path(visited: Node[], current: Node, stepsRequested: number): Point2d[]
+function reconstruct_path(visited: Node[], current: Node, stepsRequested?: number): Point2d[]
 {
 	const total_path: Point2d[] = [ current.pos ];
 	//console.log(`Reconstructing path: ${total_path}`);
@@ -117,5 +125,8 @@ function reconstruct_path(visited: Node[], current: Node, stepsRequested: number
 		total_path.push(current.pos);
 		//console.log(`Reconstructing path: ${total_path}`);
 	}
-	return total_path.reverse().splice(1, stepsRequested);
+	if (stepsRequested)
+		return total_path.reverse().slice(0, stepsRequested);
+	else
+		return total_path.reverse();
 }

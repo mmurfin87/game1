@@ -12,7 +12,7 @@ export class Tile
 {
 	constructor(
 		public terrain: Terrain,
-		public occupant: Soldier | null = null
+		//public occupant: Soldier | null = null
 	)
 	{}
 }
