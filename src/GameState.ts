@@ -141,4 +141,30 @@ export class GameState
 	{
 		return this.map[y * this.numRows + x];
 	}
+
+	findNearestEnemyTarget(player: Player, origin: Point2d, exclude: Positioned[]): Positioned | null
+	{
+		let nearest: Positioned | null = null, dist: number = 0;
+		for (const pos of [...this.soldiers, ...this.cities])
+		{
+			if (pos.player == player || exclude.includes(pos))
+				continue;
+			const stepsTo = origin.stepsTo(new Point2d(pos.col, pos.row));
+			if (nearest == null || stepsTo < dist)
+			{
+				nearest = pos;
+				dist = stepsTo;
+			}
+		}
+		return nearest;
+	}
+
+	findEnemiesInRange(player: Player, origin: Point2d, range: number): Positioned[]
+	{
+		const result: Positioned[] = [];
+		for (const pos of [...this.soldiers, ...this.cities])
+			if (pos.player != player && origin.stepsTo(pos.locate()) <= range)
+				result.push(pos);
+		return result;
+	}
 }
