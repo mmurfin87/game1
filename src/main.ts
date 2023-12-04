@@ -87,8 +87,6 @@ renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
 	controller.resolvePlayerActions();
 });
 
-
-  
 function aiThink()
 {
 	for (const player of gameState.players)

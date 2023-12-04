@@ -42,7 +42,7 @@ export class Controller
 		// Handle click events to create soldiers and select soldiers
 		renderer.canvas.addEventListener('click', this.leftClickHandler.bind(this));
 
-		renderer.canvas.addEventListener("wheel", this.rightClickHandler.bind(this));
+		renderer.canvas.addEventListener("wheel", this.wheelHandler.bind(this));
 
 		renderer.canvas.addEventListener("mousedown", this.mouseDownHandler.bind(this));
 
