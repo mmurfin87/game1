@@ -2,23 +2,31 @@ import { aStar, navigateNear } from "./AStar.js";
 import { Camera } from "./Camera.js";
 import { City } from "./City.js";
 import { Controller } from "./Controller.js";
+import { EventDispatch, SimpleEventDispatch } from "./EventDispatch.js";
 import { GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 import { Positioned } from "./Positioned.js";
 import { SimpleDebugObject, LineDebugObject, Renderer } from "./Renderer.js";
 import { Soldier } from "./Soldier.js";
+import { UnitMovementSystem } from "./UnitMovementSystem.js";
 import { AttackSoldierAction } from "./actions/AttackSoldierAction.js";
 import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
 import { HealAction } from "./actions/HealAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
+import { MoveOrderEvent } from "./events/MoveOrderEvent.js";
+import { UnitMovementEvent } from "./events/MovementInitiated.js";
+import { NewSoldierEvent } from "./events/NewSoldierEvent.js";
+import { PlayerSelectionEvent } from "./events/PlayerSelectionEvent.js";
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight - (canvas.nextElementSibling as HTMLElement).offsetHeight;
 const tileSize = 50;
 const dim = Math.min(Math.floor(canvas.width / tileSize), Math.floor(canvas.height / tileSize));
+
+const eventDispatch: EventDispatch = new SimpleEventDispatch();
 
 const gameState: GameState = (() => {
 	const numRows = dim, numCols = dim;
@@ -38,6 +46,8 @@ const gameState: GameState = (() => {
 		null
 	);
 })();
+// Temporarily for collision checking
+eventDispatch.bind(UnitMovementEvent.name, gameState.unitMovementHandler.bind(gameState));
 
 const camera: Camera = new Camera(0, 0, canvas.width, canvas.height, 1.0, tileSize);
 
@@ -52,12 +62,20 @@ const renderer: Renderer = (() => {
 		tileSize
 	);
 })();
+eventDispatch.bind(NewSoldierEvent.name, renderer.newSoldierHandler.bind(renderer));
+eventDispatch.bind(UnitMovementEvent.name, renderer.unitMovementHandler.bind(renderer));
+eventDispatch.bind(PlayerSelectionEvent.name, renderer.playerSelectionHandler.bind(renderer));
 
-const controller: Controller = new Controller(gameState, camera, renderer);
+const controller: Controller = new Controller(eventDispatch, gameState, camera, renderer);
+
+const unitMovementSystem = new UnitMovementSystem();
+eventDispatch.bind(NewSoldierEvent.name, unitMovementSystem.newSoldierHandler.bind(unitMovementSystem));
+eventDispatch.bind(MoveOrderEvent.name, unitMovementSystem.moveOrderHandler.bind(unitMovementSystem));
 
 function gameLoop()
 {
 	gameState.currentTime = Date.now();
+	unitMovementSystem.update(eventDispatch, gameState);
 	renderer.render(gameState);
 	requestAnimationFrame(gameLoop);
 }
@@ -142,7 +160,7 @@ function aiThink()
 			{
 				const path = navigateNear(gameState, soldier.locate(), targetCity.locate());
 				if (path)
-					new TargetMoveAction(soldier, path).execute();
+					new TargetMoveAction(eventDispatch, soldier, path).execute();
 			}
 			else if (targetSoldier != null)
 				new AttackSoldierAction(soldier, targetSoldier, gameState).execute();
@@ -156,7 +174,7 @@ function aiThink()
 				{
 					const path = navigateNear(gameState, soldier.locate(), target.locate());
 					if (path)
-						new TargetMoveAction(soldier, path).execute();
+						new TargetMoveAction(eventDispatch, soldier, path).execute();
 				}
 			}
 		}
@@ -170,7 +188,7 @@ function aiThink()
 				continue;
 
 			if (soldierCount < 3 && !gameState.searchCoords(city.row, city.col).find(Soldier.isType))
-				new BuildSoldierAction(gameState, player, city).execute();
+				new BuildSoldierAction(eventDispatch, gameState, player, city).execute();
 		}
 
 		gameState.soldiers.filter(soldier => soldier.player == player).forEach(soldier => soldier.nextTurn(gameState));

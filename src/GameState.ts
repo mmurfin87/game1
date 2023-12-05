@@ -4,6 +4,7 @@ import { Point2d } from "./Point2d.js";
 import { Positioned } from "./Positioned.js";
 import { Soldier } from "./Soldier.js";
 import { Tile, Terrain } from "./Tile.js";
+import { UnitMovementEvent } from "./events/MovementInitiated.js";
 
 export class GameState
 {
@@ -166,5 +167,17 @@ export class GameState
 			if (pos.player != player && origin.stepsTo(pos.locate()) <= range)
 				result.push(pos);
 		return result;
+	}
+
+	unitMovementHandler(event: UnitMovementEvent): void
+	{
+		console.log('GameState', event);
+		const soldier = this.soldiers.find(soldier => soldier.id == event.id);
+		if (soldier)
+		{
+			soldier.movesLeft -= soldier.locate().stepsTo(event.target);
+			soldier.col = event.target.x;
+			soldier.row = event.target.y;
+		}
 	}
 }

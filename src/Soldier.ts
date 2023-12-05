@@ -7,11 +7,18 @@ const moveTime = 500;
 
 export class Soldier
 {
+	static idCounter: bigint = BigInt(0);
+	static nextId(): bigint
+	{
+		return Soldier.idCounter++;
+	}
+
 	public readonly type = "Soldier";
 	public path: Point2d[] | null = null;
 	private moveStartTime: number | null = null;
 
 	constructor(
+		public id: bigint,
 		public row: number, 
 		public col: number, 
 		public player: Player,

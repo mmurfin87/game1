@@ -1,8 +1,12 @@
 import { Camera } from "./Camera.js";
 import { GameState } from "./GameState.js";
 import { Point2d } from "./Point2d.js";
-import { Positioned } from "./Positioned.js";
 import { Terrain } from "./Tile.js";
+import { Animation } from "./animations/Animation.js";
+import { MoveAnimation } from "./animations/MoveAnimation.js";
+import { UnitMovementEvent } from "./events/MovementInitiated.js";
+import { NewSoldierEvent } from "./events/NewSoldierEvent.js";
+import { PlayerSelectionEvent } from "./events/PlayerSelectionEvent.js";
 
 function loadimage(url: string): HTMLImageElement
 {
@@ -10,6 +14,8 @@ function loadimage(url: string): HTMLImageElement
 	tmp.src = url;
 	return tmp;
 }
+
+let testAnimation: MoveAnimation = new MoveAnimation(0, 500, new Point2d(0, 0), new Point2d(1, 1));
 
 interface DebugObject
 {
@@ -56,10 +62,23 @@ export class LineDebugObject implements DebugObject
 	}
 }
 
+class Renderable
+{
+	constructor(
+		public id: bigint,
+		public image: HTMLImageElement,
+		public color: string,
+		public position: Point2d,
+		public animation: Animation | null
+	)
+	{}
+}
+
 export class Renderer
 {
 	public readonly debug: DebugObject[] = [];
 
+	private readonly renderables: Renderable[] = [];
 	private readonly isoTilePath: Path2D;
 	private readonly terrainImage: Map<Terrain, {color: string, image: HTMLImageElement}> = new Map();
 	private readonly grasslands = loadimage("/isograss.png");
@@ -93,6 +112,28 @@ export class Renderer
 		this.terrainImage.set(Terrain.FOREST, {color: 'darkgreen', image: this.forest});
 		this.terrainImage.set(Terrain.MOUNTAINS, {color: 'gray', image: this.mountains});
 		this.terrainImage.set(Terrain.WATER, {color: 'blue', image: this.water});
+	}
+
+	newSoldierHandler(event: NewSoldierEvent): void
+	{
+		console.log('Renderer', event);
+		this.renderables.push(new Renderable(event.id, this.soldier, 'yellow', event.position, null));
+	}
+
+	unitMovementHandler(event: UnitMovementEvent): void
+	{
+		console.log('Renderer', event);
+		const renderable = this.renderables.find(r => r.id == event.id);
+		if (!renderable)
+			return;
+		renderable.position = event.target;
+		renderable.animation = new MoveAnimation(event.start, event.duration, event.origin, event.target);
+	}
+
+	playerSelectionHandler(event: PlayerSelectionEvent): void
+	{
+		console.log('Renderer', event);
+
 	}
 
 	private renderVictory(): void
@@ -163,16 +204,15 @@ export class Renderer
 	}
 
 	// Function to draw the red circle around the selected city
-	drawSelection(position: Positioned, tileSize: number)
+	drawSelection(screenOrigin: Point2d, radius: number)
 	{
-		const offset = this.gridToScreenCoords(position.locate());
 		this.ctx.strokeStyle = 'red';
 		this.ctx.lineWidth = 2;
 		this.ctx.beginPath();
 		this.ctx.arc(
-			offset.x,
-			offset.y + this.tileSize/2,
-			tileSize / (position.type == "City" ? 2 : 3) + 2, // Adjust the radius to your liking
+			screenOrigin.x,
+			screenOrigin.y + this.tileSize/2,
+			radius,//this.tileSize / (selected.type == "City" ? 2 : 3) + 2, // Adjust the radius to your liking
 			0,
 			Math.PI * 2
 		);
@@ -225,28 +265,30 @@ export class Renderer
 				this.ctx.fill(this.isoTilePath);
 			}
 			this.drawColorTextBox(new Point2d(-ts/2, ts), ts, ownerBarHeight, city.player.color, 12, 'black', ''+city.healthLeft);
+			if (city == gameState.selection)
+				this.drawSelection(Point2d.origin(), ts/2);
 			this.ctx.restore();
 		});
 
+		/*
 		// Draw soldiers
 		gameState.soldiers.forEach(soldier => {
 			let offset = this.gridToScreenCoords(soldier.locate());
 			let dest = soldier.destination();
+			let dv: Point2d;
 			if (dest)
 			{
 				dest = this.gridToScreenCoords(dest);
 				let scale = soldier.moveCompletionPercent(gameState.currentTime);
 				let dist = offset.distanceTo(dest);
-				const dv = dest
+				dv = dest
 					.subtract(offset)
-					.unit()
-				//	.scale(soldier.moveCompletionPercent(gameState.currentTime) * offset.distanceTo(dest));
-					.scale(scale * dist);
-				//if (soldier.player == gameState.humanPlayer)
-				//	console.log(`Animating: ${gameState.currentTime} | ${scale} * ${dist} = ${scale * dist} | (${dv.x},${dv.y})`);
+					.scale(scale);
 				offset.x += dv.x;
 				offset.y += dv.y;
 			}
+			else
+				dv = Point2d.origin();
 
 			if (this.soldier.complete)
 				this.ctx.drawImage(this.soldier, 0, 0, this.soldier.width, this.soldier.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
@@ -256,7 +298,34 @@ export class Renderer
 				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
 			}
 			this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, soldier.player.color, 12, 'white', ''+soldier.healthLeft);
-			soldier.update(gameState);
+			if (soldier == gameState.selection)
+				this.drawSelection(offset, this.tileSize / 3);
+		});
+		*/
+
+		this.renderables.forEach(r => {
+			let offset = r.position;
+			if (r.animation)
+			{
+				const step = r.animation.evaluateAnimationStep(gameState.currentTime, this.camera);
+				offset = step.position;
+				if (step.complete)
+					r.animation = null;
+			}
+			offset = this.gridToScreenCoords(offset);
+			
+			if (r.image.complete)
+				this.ctx.drawImage(r.image, 0, 0, r.image.width, r.image.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
+			else
+			{
+				this.ctx.fillStyle = r.color;
+				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
+			}
+			
+			//this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, soldier.player.color, 12, 'white', ''+soldier.healthLeft);
+			//if (soldier == gameState.selection)
+			//	this.drawSelection(offset, this.tileSize / 3);
+			//soldier.update(gameState);
 		});
 
 		// Draw Soldier paths
@@ -285,8 +354,24 @@ export class Renderer
 		});
 
 		if (gameState.selection)
-			this.drawSelection(gameState.selection, ts);
+			this.drawSelection(this.camera.gridToScreenCoords(gameState.selection.locate()), this.tileSize / (gameState.selection.type == "City" ? 2 : 3));
 
+		////////////////////
+		// Test Animation //
+		////////////////////
+		/*
+		if (testAnimation.startTime + testAnimation.duration < gameState.currentTime)
+			testAnimation = new MoveAnimation(gameState.currentTime, 500, testAnimation.origin, testAnimation.target);
+		let offset = this.camera.gridToScreenCoords(testAnimation.evaluateAnimationStep(gameState.currentTime, this.camera).position);
+		
+		if (this.soldier.complete)
+			this.ctx.drawImage(this.soldier, 0, 0, this.soldier.width, this.soldier.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
+		else
+		{
+			this.ctx.fillStyle = 'black';
+			this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
+		}
+		*/
 		this.ctx.resetTransform();
 	}
 

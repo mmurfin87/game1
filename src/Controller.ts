@@ -1,6 +1,7 @@
 import { navigateNear } from "./AStar.js";
 import { Camera } from "./Camera.js";
 import { City } from "./City.js";
+import { EventDispatch } from "./EventDispatch.js";
 import { GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
@@ -15,6 +16,7 @@ import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
 import { HealAction } from "./actions/HealAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
+import { PlayerSelectionEvent } from "./events/PlayerSelectionEvent.js";
 
 class ActionOption
 {
@@ -32,6 +34,7 @@ export class Controller
 	private dragStart: number = Number.MAX_VALUE;
 
 	constructor(
+		private dispatch: EventDispatch,
 		private gameState: GameState,
 		private camera: Camera,
 		private renderer: Renderer)
@@ -62,7 +65,7 @@ export class Controller
 			{
 				const nearestEnemy = this.gameState.findNearestEnemyTarget(selection.player, selection.locate(), []);
 				if (selection.movesLeft > 0 && (nearestEnemy == null || nearestEnemy.locate().stepsTo(selection.locate()) > 0))
-					actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(this.gameState, player, selection).execute()));
+					actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(this.dispatch, this.gameState, player, selection).execute()));
 			}
 				break;
 			case "Soldier":
@@ -75,7 +78,7 @@ export class Controller
 						this.moveAction = (p: Point2d) => {
 							const path = navigateNear(this.gameState, selection.locate(), p);
 							if (path)
-								return new TargetMoveAction(selection, path);
+								return new TargetMoveAction(this.dispatch, selection, path);
 							return {execute() { console.log('NO ACTION'); }};	// TODO: this is pretty terrible
 						}; 
 					}));
@@ -132,10 +135,6 @@ export class Controller
 		if (this.drag)
 			return;
 		const coords = this.renderer.screenToGridCoords(e.offsetX, e.offsetY);
-		//console.log(`Clicked (${e.offsetX},${e.offsetY}) [${camera.x},${camera.y}] => ${coords}`);
-		//renderer.debug.push(new DebugObject(new Point2d(e.offsetX, e.offsetY), 2, 2, null));
-		//renderer.debug.push(new DebugObject(renderer.gridToScreenCoords(coords), 2, 2, null));
-		//renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(coords), 2));
 		if (this.moveAction)
 		{
 			try
@@ -153,10 +152,11 @@ export class Controller
 			console.log(`moveAction cleared: ${this.moveAction}`);
 			return;
 		}
+		const oldSelection = this.gameState.selection;
 		this.gameState.selection = this.gameState.search(coords)
 			.find(pos => pos.player.id == this.gameState.humanPlayer.id) ?? null;
-		//if (gameState.selection)
-		//	renderer.debug.push(new LineDebugObject(new Point2d(e.offsetX, e.offsetY), renderer.gridToScreenCoords(gameState.selection.position()), 2));
+		if (oldSelection != this.gameState.selection)
+			this.dispatch.dispatch(new PlayerSelectionEvent(this.gameState.humanPlayer, this.gameState.selection));
 		this.resolvePlayerActions();
 	}
 
@@ -205,7 +205,7 @@ export class Controller
 					{
 						const path = navigateNear(this.gameState, soldier.locate(), target);
 						if (path)
-							new TargetMoveAction(soldier, path).execute();
+							new TargetMoveAction(this.dispatch, soldier, path).execute();
 					}
 				}
 				
@@ -220,7 +220,7 @@ export class Controller
 		e.preventDefault();
 		const dscale = Math.max(-0.1, Math.min(0.1, e.deltaY * -0.001));
 		const oldscale = this.camera.scale;
-		this.camera.scale = Math.min(1.5, Math.max(0.6, this.camera.scale + dscale));
+		this.camera.scale = Math.min(2.1, Math.max(0.6, this.camera.scale + dscale));
 		//console.log(`Scroll: ${e.deltaY} -> ${dscale} => ${camera.scale}`);
 		const dwidth = this.camera.width * (this.camera.scale - oldscale), dheight = this.camera.height * (this.camera.scale - oldscale);
 		const percentX = e.offsetX / this.camera.width;
