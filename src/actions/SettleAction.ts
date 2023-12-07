@@ -12,7 +12,8 @@ export class SettleAction implements Action
 	constructor(
 		private readonly player: Player, 
 		private readonly selection: Archetype<['movement']>, 
-		private readonly settlement: City)
+		private readonly settlement: Archetype<['player', 'position']>
+	)
 	{}
 
 	execute(): void

@@ -25,7 +25,7 @@ export function navigateNear(gameState: GameState, start: Point2d, goal: Point2d
 	if (path == null)
 		return path;
 	let i = path.length - 1;
-	for (; i >= 0 && gameState.search(path[i]).find(Soldier.isType); i--);
+	for (; i >= 0 && gameState.search(path[i], 'soldier').length > 0; i--);
 	return path.slice(0, i + 1);
 }
 
@@ -64,7 +64,7 @@ export function aStar(gameState: GameState, start: Point2d, goal: Point2d, steps
 		{
 			if (visited.some(n => Point2d.equivalent(n.pos, neighbor)))
 				continue;  // Ignore the neighbor which is already evaluated
-			if (!Point2d.equivalent(goal, neighbor) && gameState.search(neighbor).find(Soldier.isType))
+			if (!Point2d.equivalent(goal, neighbor) && gameState.search(neighbor).length > 0)
 				continue;	// Ignore currently occupied neighbors unless it's the goal
 
 			// The distance from start to a neighbor

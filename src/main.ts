@@ -4,7 +4,7 @@ import { City } from "./City.js";
 import { Controller } from "./Controller.js";
 import { Archetype, Entity, isArchetype } from "./Entity.js";
 import { EventDispatch, SimpleEventDispatch } from "./EventDispatch.js";
-import { GameState } from "./GameState.js";
+import { EnemyArchetype, GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 import { Positioned } from "./Positioned.js";
@@ -34,7 +34,6 @@ const gameState: GameState = (() => {
 		numRows,
 		numCols,
 		[],
-		[],
 		barbarianPlayer,
 		humanPlayer,
 		[ barbarianPlayer, humanPlayer, new Player(2, 'red'), new Player(3, 'purple')],
@@ -56,23 +55,21 @@ const renderer: Renderer = (() => {
 	);
 })();
 
-const entities: Entity[] = [];
-
-const controller: Controller = new Controller(entities, gameState, camera, renderer);
+const controller: Controller = new Controller(gameState.entities, gameState, camera, renderer);
 
 const unitMovementSystem = new UnitMovementSystem();
 
 function gameLoop()
 {
 	gameState.currentTime = Date.now();
-	unitMovementSystem.update(entities, gameState);
-	renderer.render(entities, gameState);
+	unitMovementSystem.update(gameState.entities, gameState);
+	renderer.render(gameState.entities, gameState);
 	requestAnimationFrame(gameLoop);
 }
 
 // Call the function to generate random cities
 gameState.generateRandomCities();
-camera.centerOnGrid(gameState.cities.filter(c => c.player == gameState.humanPlayer)[0].locate());
+camera.centerOnGrid(gameState.entities.filter(e => e.city && e.player == gameState.humanPlayer)[0].position?.position ?? Point2d.origin());
 
 // Start the game loop
 requestAnimationFrame(gameLoop);
@@ -80,7 +77,7 @@ requestAnimationFrame(gameLoop);
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
 	//gameState.soldiers.filter(soldier => soldier.player == gameState.humanPlayer).forEach(soldier => soldier.nextTurn(gameState));
 	console.log('Next Turn');
-	unitMovementSystem.nextTurn(entities, gameState);
+	unitMovementSystem.nextTurn(gameState.entities, gameState);
 	gameState.cleanupDefeatedPlayers();
 	aiThink();
 	gameState.cleanupDefeatedPlayers();
@@ -91,8 +88,6 @@ renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
 		return;
 	}
 	gameState.currentTurn += 1;
-	gameState.soldiers.forEach(s => s.movesLeft = s.moves);
-	gameState.cities.forEach(s => s.movesLeft = s.moves);
 	controller.resolvePlayerActions();
 });
 
@@ -104,22 +99,21 @@ function aiThink()
 			continue;
 		
 		let soldierCount = 0;
-		const targets: Positioned[] = [];
+		const targets: EnemyArchetype[] = [];
 
 		// First, move all my soldiers to attack targets
-		for (const soldier of entities)
+		for (const soldier of gameState.entities)
 		{
-			if (soldier.player != player || !isArchetype(soldier, 'position', 'movement', 'health'))
+			if (soldier.player != player || !isArchetype(soldier, 'position', 'movement', 'health', 'soldier'))
 				continue;
 			soldierCount++;
 
 			if (soldier.movement.movesLeft < 1)
 				continue;
 
-			const inCity: City | undefined = gameState.searchCoords(soldier.position.position.y, soldier.position.position.x)
+			const inCity: Archetype<['position', 'city', 'player']> | undefined = gameState.search(soldier.position.position, 'city', 'player')
 				.filter(p => p.player != player)
-				.filter(City.isType)
-				.find(p => p.row == soldier.position.position.y && p.col == soldier.position.position.x);
+				.find(p => Point2d.equivalent(soldier.position.position, p.position.position));
 			if (inCity)
 			{
 				new SettleAction(player, soldier, inCity).execute();
@@ -133,56 +127,55 @@ function aiThink()
 			{
 				if (targets.includes(target))
 					continue;
-				switch (target.type)
+				if (target.city)
 				{
-					case "City":
-						if (!gameState.searchCoords(target.row, target.col).find(Soldier.isType))
-						{
-							targetCity = target;
-						}
-						break;
-					case "Soldier":
-						if (targetSoldier == null || ((targetEntity?.health?.remaining ?? 1) < (targetEntity?.health?.amount ?? 1)))
-						{
-							targetSoldier = target;
-							targetEntity = (entities.find(e => e.soldier == target && isArchetype(e, 'position', 'movement', 'health')) ?? null) as Archetype<['position', 'movement', 'health']> | null;
-						}
-						break;
+					if (gameState.search(target.position.position, 'soldier').length == 0)
+					{
+						targetCity = target.city;
+						targetEntity = target;
+					}
+				}
+				else if (target.soldier)
+				{
+					if (targetSoldier == null || ((targetEntity?.health?.remaining ?? 1) < (targetEntity?.health?.amount ?? 1)))
+					{
+						targetSoldier = target.soldier;
+						targetEntity = target;
+					}
 				}
 			}
-			if (targetCity != null)
+			if (targetCity != null && targetEntity)
 			{
-				const path = navigateNear(gameState, soldier.position.position, targetCity.locate());
+				const path = navigateNear(gameState, soldier.position.position, targetEntity.position.position);
 				if (path)
-					new TargetMoveAction(soldier, path).execute(entities);
+					new TargetMoveAction(soldier, path).execute(gameState.entities);
 			}
 			else if (targetSoldier != null && targetEntity)
-				new AttackSoldierAction(soldier, targetEntity, gameState).execute(entities);
+				new AttackSoldierAction(soldier, targetEntity, gameState).execute(gameState.entities);
 			else if ((targetEntity?.health?.remaining ?? 1) < (targetEntity?.health?.amount ?? 1))
-				new HealAction(soldier).execute(entities);
+				new HealAction(soldier).execute(gameState.entities);
 			else
 			{
 				const target = gameState.findNearestEnemyTarget(player, soldier.position.position, targets);
-				console.log(`Identified nearest enemy target:`, target);
 				if (target)
 				{
-					const path = navigateNear(gameState, soldier.position.position, target.locate());
+					const path = navigateNear(gameState, soldier.position.position, target.position.position);
 					if (path)
-						new TargetMoveAction(soldier, path).execute(entities);
+						new TargetMoveAction(soldier, path).execute(gameState.entities);
 				}
 			}
 		}
 
-		for (const city of gameState.cities)
+		for (const city of gameState.entities.filter((e: Entity): e is Archetype<['player', 'position', 'movement', 'health', 'city']> => isArchetype(e, 'player', 'position', 'movement', 'health', 'city')))
 		{
 			if (city.player != player)
 				continue;
 
-			if (city.movesLeft < 1)
+			if (city.movement.movesLeft < 1)
 				continue;
 
-			if (soldierCount < 3 && !gameState.searchCoords(city.row, city.col).find(Soldier.isType))
-				new BuildSoldierAction(gameState, player, city).execute(entities);
+			if (soldierCount < 3 && gameState.search(city.position.position, 'soldier').length == 0)
+				new BuildSoldierAction(gameState, player, city).execute(gameState.entities);
 		}
 	}
 }

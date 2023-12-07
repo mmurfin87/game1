@@ -14,6 +14,6 @@ export class HealAction implements Action
     {
         this.selection.health.remaining = Math.min(this.selection.health.amount, Math.floor(this.selection.health.remaining + this.selection.health.amount * 0.33));
         if (this.selection.movement)
-            this.selection.movement.moves = 0;
+            this.selection.movement.movesLeft = 0;
     }
 }

@@ -1,10 +1,12 @@
 import { City } from "./City.js";
+import { Archetype, Entity, isArchetype } from "./Entity.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
-import { Positioned } from "./Positioned.js";
-import { Soldier } from "./Soldier.js";
 import { Tile, Terrain } from "./Tile.js";
-import { UnitMovementEvent } from "./events/MovementInitiated.js";
+import { Health } from "./components/Health.js";
+import { Movement } from "./components/Movement.js";
+import { Position } from "./components/Position.js";
+import { Renderable } from "./components/Renderable.js";
 
 export class GameState
 {
@@ -16,55 +18,43 @@ export class GameState
 		public readonly map: Tile[],
 		public readonly numRows: number,
 		public readonly numCols: number,
-		public readonly cities: City[],
-		public readonly soldiers: Soldier[],
+		public readonly entities: Entity[],
 		public readonly barbarianPlayer: Player,
 		public readonly humanPlayer: Player,
 		public readonly players: Player[],
-		public selection: Positioned | null
+		public selection: Entity | null
 	)
 	{}
 
 	checkWinner(): Player | null
 	{
-		const winner = this.cities.find(city => city.player != this.barbarianPlayer)?.player ?? null;
-		if (this.cities.some(city => city.player != winner && city.player != this.barbarianPlayer))
+		const winner = this.entities.find(e => e.city && e.player != this.barbarianPlayer)?.player ?? null;
+		if (this.entities.some(e => e.city && e.player != winner && e.player != this.barbarianPlayer))
 			return null;
 		return winner;
 	}
 
-	removeSoldier(soldier: Soldier): void
-	{
-		const index = this.soldiers.findIndex(e => e == soldier);
-		if (index < 0 || index > this.soldiers.length)
-			throw new Error("can't find soldier in gamestate soldiers list");
-		console.log(`Removing soldier from index ${index}`);
-		this.soldiers.splice(index, 1);
-		//const soldierTile = this.map.find(t => t.occupant == soldier);
-		//if (soldierTile)
-		//	soldierTile.occupant = null;
-		if (this.selection == soldier)
-			this.selection = null;
-	}
-
-
 	cleanupDefeatedPlayers()
 	{
-		const playersAlive = this.cities.reduce<Player[]>((r, c) => {
-				if (!r.includes(c.player))
+		const playersAlive = this.entities.reduce<Player[]>((r, c) => {
+				if (c.city && c.player && !r.includes(c.player))
 					r.push(c.player);
 				return r;
 			}, 
 			[]);
-		for (let i = 0; i < this.soldiers.length; i++)
-			if (!playersAlive.includes(this.soldiers[i].player))
-				this.soldiers.splice(i, 1);
+		for (let i = 0; i < this.entities.length; i++)
+		{
+			const e = this.entities[i];
+			if (e.player && !playersAlive.includes(e.player))
+				this.entities.splice(i, 1);
+		}
 	}
 
 	// Function to generate random cities
 	generateRandomCities()
 	{
-		while (this.cities.length < this.players.length)
+		const cities: Archetype<['position', 'player', 'movement', 'city', 'renderable']>[] = [];//this.entities.filter((e: Entity): e is Archetype<['position', 'player', 'movement', 'city']> => isArchetype(e, 'position', 'player', 'movement', 'city'))
+		while (cities.length < this.players.length)
 		{
 			for (let row = 0; row < this.numRows; row++)
 			{
@@ -83,10 +73,19 @@ export class GameState
 						this.map[row * this.numRows + col] = new Tile(terrain);
 
 					if (Math.random() < 0.1) {
-						if (this.cities.some(city => Math.abs(city.row - row) < 3 && Math.abs(city.col - col) < 3))
+						if (cities.some(city => Math.abs(city.position.position.x - col) < 3 && Math.abs(city.position.position.y - row) < 3))
 							continue;
 						this.map[row * this.numRows + col].terrain = Terrain.GRASSLAND;	// make sure city is on a traversible ground
-						this.cities.push(new City(row, col, this.barbarianPlayer, 1, 10, 1, 10));
+						cities.push(new Entity(
+							Entity.newId(),
+							this.barbarianPlayer,
+							new Position(new Point2d(col, row)),
+							new Movement(null, null, 0, true, 1, 1),
+							new Renderable('city', 'yellow', null),
+							new Health(10, 10),
+							undefined,
+							new City()) as Archetype<['position', 'player', 'movement', 'city', 'renderable']>
+						);
 					}
 				}
 			}
@@ -96,41 +95,27 @@ export class GameState
 		{
 			if (player == this.barbarianPlayer)
 				continue;
-			let index = Math.floor(Math.random() * this.cities.length), i = (index + 1) % this.cities.length;
-			for (; i != index; i = (i + 1) % this.cities.length)
+			let index = Math.floor(Math.random() * cities.length), i = (index + 1) % cities.length;
+			for (; i != index; i = (i + 1) % cities.length)
 			{
-				if (this.cities[i].player == this.barbarianPlayer)
+				if (cities[i].player == this.barbarianPlayer)
 					break;
 				if (i == index)
 					throw new Error("Not enough cities");
 			}
-			this.cities[i].player = player;
+			cities[i].player = player;
 
 		}
+		cities.forEach(c => this.entities.push(c));
 	}
 
-	search(coords: Point2d): Positioned[]
+	search<T extends (keyof Entity)[]>(coords: Point2d, ...keys: T): Archetype<['position', ...T]>[]
 	{
-		const result:Positioned[] = [];
-		this.searchArray(coords.x, coords.y, this.soldiers, result);
-		this.searchArray(coords.x, coords.y, this.cities, result);
+		const result: Archetype<T>[] = [];
+		for (const e of this.entities)
+			if (isArchetype(e, ...keys) && e.position && Point2d.equivalent(coords, e.position.position))
+				result.push(e);
 		return result;
-	}
-
-	searchCoords(row: number, col: number): Positioned[]
-	{
-		const result:Positioned[] = [];
-		// Order soldiers first so they are selected over cities
-		this.searchArray(col, row, this.soldiers, result);
-		this.searchArray(col, row, this.cities, result);
-		return result;
-	}
-
-	private searchArray(x: number, y: number, array: Positioned[], result: Positioned[]): void
-	{
-		for (const pos of array)
-			if (x == pos.col && y == pos.row)
-				result.push(pos);
 	}
 
 	tileAtPoint(coords: Point2d): Tile
@@ -143,41 +128,36 @@ export class GameState
 		return this.map[y * this.numRows + x];
 	}
 
-	findNearestEnemyTarget(player: Player, origin: Point2d, exclude: Positioned[]): Positioned | null
+	findNearestEnemyTarget(player: Player, origin: Point2d, exclude: Entity[]): EnemyArchetype | null
 	{
-		let nearest: Positioned | null = null, dist: number = 0;
-		for (const pos of [...this.soldiers, ...this.cities])
+		let nearest: EnemyArchetype | null = null, dist: number = 0;
+		for (const e of this.entities)
 		{
-			if (pos.player == player || exclude.includes(pos))
+			if (!isEnemyArchetype(e) || !(e.city || e.soldier) || e.player == player || exclude.includes(e))
 				continue;
-			const stepsTo = origin.stepsTo(new Point2d(pos.col, pos.row));
+			const stepsTo = origin.stepsTo(e.position.position);
 			if (nearest == null || stepsTo < dist)
 			{
-				nearest = pos;
+				nearest = e;
 				dist = stepsTo;
 			}
 		}
 		return nearest;
 	}
 
-	findEnemiesInRange(player: Player, origin: Point2d, range: number): Positioned[]
+	findEnemiesInRange(player: Player, origin: Point2d, range: number): EnemyArchetype[]
 	{
-		const result: Positioned[] = [];
-		for (const pos of [...this.soldiers, ...this.cities])
-			if (pos.player != player && origin.stepsTo(pos.locate()) <= range)
-				result.push(pos);
+		const result: EnemyArchetype[] = [];
+		for (const e of this.entities)
+			if (isEnemyArchetype(e) && (e.city || e.soldier) && e.player != player && origin.stepsTo(e.position.position) <= range)
+				result.push(e);
 		return result;
 	}
+}
 
-	unitMovementHandler(event: UnitMovementEvent): void
-	{
-		console.log('GameState', event);
-		const soldier = this.soldiers.find(soldier => soldier.id == event.id);
-		if (soldier)
-		{
-			soldier.movesLeft -= soldier.locate().stepsTo(event.target);
-			soldier.col = event.target.x;
-			soldier.row = event.target.y;
-		}
-	}
+export type EnemyArchetype = Archetype<['player', 'position', 'movement', 'health']>;
+
+function isEnemyArchetype(e: Entity): e is EnemyArchetype
+{
+	return isArchetype(e, 'player', 'position', 'movement', 'health');
 }

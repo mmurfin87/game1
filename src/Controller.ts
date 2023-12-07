@@ -2,7 +2,7 @@ import { navigateNear } from "./AStar.js";
 import { Camera } from "./Camera.js";
 import { City } from "./City.js";
 import { Archetype, Entity, isArchetype } from "./Entity.js";
-import { GameState } from "./GameState.js";
+import { EnemyArchetype, GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 import { Positioned } from "./Positioned.js";
@@ -55,58 +55,45 @@ export class Controller
 		renderer.canvas.addEventListener("mouseleave", this.mouseLeaveHandler.bind(this));
 	}
 	
-	private calculateActions(player: Player, selection: Positioned): ActionOption[]
+	private calculateActions(player: Player, selection: Entity): ActionOption[]
 	{
 		const actions: ActionOption[] = [];
-		switch (selection.type)
+		if (isArchetype(selection, 'player', 'position', 'movement', 'health', 'city'))
 		{
-			case "City":
+			const nearestEnemy = this.gameState.findNearestEnemyTarget(selection.player, selection.position.position, []);
+			if (selection.movement.movesLeft > 0 && (nearestEnemy == null || nearestEnemy.position.position.stepsTo(selection.position.position) > 0))
+				actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(this.gameState, player, selection).execute(this.entities)));
+		}
+		else if (isArchetype(selection, 'player', 'position', 'movement', 'health', 'soldier'))
+		{
+			if (selection.movement.movesLeft > 0)
 			{
-				const nearestEnemy = this.gameState.findNearestEnemyTarget(selection.player, selection.locate(), []);
-				if (selection.movesLeft > 0 && (nearestEnemy == null || nearestEnemy.locate().stepsTo(selection.locate()) > 0))
-					actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(this.gameState, player, selection).execute(this.entities)));
-			}
-				break;
-			case "Soldier":
-				const entity: SoldierArchetype | undefined = findSoldierEntity(this.entities, selection);
-				if (!entity)
-					throw new Error("Can't find entity for selection");
-				if (entity.movement.movesLeft > 0)
-				{
-					if (entity.health.remaining < entity.health.amount)
-						actions.push(new ActionOption("Heal", () => new HealAction(entity).execute(this.entities)));
-					actions.push(new ActionOption("Move", () => 
-					{ 
+				if (selection.health.remaining < selection.health.amount)
+					actions.push(new ActionOption("Heal", () => new HealAction(selection).execute(this.entities)));
+				actions.push(new ActionOption("Move", () => 
+				{ 
+					this.moveAction = (p: Point2d) => {
+						const path = navigateNear(this.gameState, selection.position.position, p);
+						if (path)
+							return new TargetMoveAction(selection, path);
+						return {execute(entities: Entity[]) { console.log('NO ACTION'); }};	// TODO: this is pretty terrible
+					}; 
+				}));
+				const settlement: Archetype<['player', 'position', 'city']> | undefined = this.gameState.search(selection.position.position, 'player', 'city').find(city => city.player != player);
+				if (settlement)
+					actions.push(new ActionOption("Settle", () => new SettleAction(player, selection, settlement).execute()));
+				const enemiesInRange = this.gameState.findEnemiesInRange(player, selection.position.position, 1).filter(e => e.soldier);
+				if (enemiesInRange.length > 0)
+					actions.push(new ActionOption("Attack", () => { 
 						this.moveAction = (p: Point2d) => {
-							const path = navigateNear(this.gameState, entity.position.position, p);
-							if (path)
-								return new TargetMoveAction(entity, path);
-							return {execute(entities: Entity[]) { console.log('NO ACTION'); }};	// TODO: this is pretty terrible
-						}; 
+							const target: EnemyArchetype | undefined = enemiesInRange.find(pos => Point2d.equivalent(pos.position.position, p));
+							if (target)
+								return new AttackSoldierAction(selection, target, this.gameState);
+							else
+								throw new Error("Invalid attack target");
+						};
 					}));
-					const settlement: City | undefined = this.gameState.searchCoords(entity.position.position.y, entity.position.position.x).find(pos => pos.type == "City" && pos.player != player) as City | undefined;
-					if (settlement)
-						actions.push(new ActionOption("Settle", () => new SettleAction(player, entity, settlement).execute()));
-					const enemiesInRange = this.gameState.findEnemiesInRange(player, entity.position.position, 1).filter(e => e.type == "Soldier");
-					if (enemiesInRange.length > 0)
-						actions.push(new ActionOption("Attack", () => { 
-							this.moveAction = (p: Point2d) => {
-								//console.log(`Attacking on ${p} -> ${p.stepScale(gameState.tileSize)}`);
-								let target: Positioned | Archetype<['position', 'movement', 'health']> | undefined = enemiesInRange.find(pos => {
-									const result = pos.col == p.x && pos.row == p.y;
-									console.log(`	comparing ${p} to (${pos.col},${pos.row}) = ${result}`);
-									return result;
-								});
-								if (target)
-									target = this.entities.find(e => target == e.soldier && isArchetype(e, 'position', 'movement', 'health')) as Archetype<['position', 'movement', 'health']> | undefined;
-								if (target)
-									return new AttackSoldierAction(entity, target, this.gameState);
-								else
-									throw new Error("Invalid attack target");
-							};
-						}));
-				}
-				break;
+			}
 		}
 		return actions;
 	}
@@ -157,8 +144,8 @@ export class Controller
 			return;
 		}
 		const oldSelection = this.gameState.selection;
-		this.gameState.selection = this.gameState.search(coords)
-			.find(pos => pos.player.id == this.gameState.humanPlayer.id) ?? null;
+		this.gameState.selection = this.gameState.search(coords).sort((a, b) => a.soldier ? -1 : b.soldier ? 1 : 0)
+			.find(e => e.player?.id == this.gameState.humanPlayer.id) ?? null;
 		this.resolvePlayerActions();
 	}
 
@@ -174,51 +161,39 @@ export class Controller
 			return;
 		}
 
-		switch (this.gameState.selection.type)
+		if (isArchetype(this.gameState.selection, 'player', 'position', 'movement', 'health', 'soldier'))
 		{
-			case "City":
+			const soldier = this.gameState.selection;
+			const origin: Point2d = soldier.position.position;
+			const distanceToTarget = origin.stepsTo(target);
+			
+			const targetTerrain: Terrain = this.gameState.map[target.y * this.gameState.numRows + target.x].terrain;
+			if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
+				console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
+			else
 			{
-				break;
-			}
-			case "Soldier":
-			{
-				const soldier: Soldier = this.gameState.selection as Soldier;
-				const soldierEntity = findSoldierEntity(this.entities, soldier);
-				if (!soldierEntity)
-					throw new Error("Can't find entity for selection");
-				const origin: Point2d = this.gameState.selection.locate();
-				const distanceToTarget = origin.stepsTo(target);
-				
-				const targetTerrain: Terrain = this.gameState.map[target.y * this.gameState.numRows + target.x].terrain;
-				if (targetTerrain == Terrain.WATER || targetTerrain == Terrain.MOUNTAINS)
-					console.log(`Target (${target.y},${target.x}) is ${targetTerrain} and cannot be traversed`);
+				const occupant = this.gameState.search(target, 'player', 'movement', 'health', 'soldier')[0] ?? undefined;
+				if (occupant && distanceToTarget < 2)
+				{
+					if (occupant.id == soldier.id)
+					{
+						if (occupant.movement)
+						{
+							occupant.movement.path = null;
+							occupant.movement.stepStart = null;
+						}
+					}
+					else if (occupant.player == this.gameState.humanPlayer)
+						console.log(`Can't stack friendly units`);
+					else if (soldier.movement.movesLeft > 0 && distanceToTarget == 1)
+						new AttackSoldierAction(soldier, occupant, this.gameState).execute(this.entities);
+				}
 				else
 				{
-					const occupant: Entity | undefined = this.entities.find(e => Point2d.equivalent(e.position?.position ?? new Point2d(0, -1), e.position?.position ?? new Point2d(-1, 0)) && e.soldier);
-					if (occupant && distanceToTarget < 2)
-					{
-						if (occupant.soldier == soldier)
-						{
-							if (occupant.movement)
-							{
-								occupant.movement.path = null;
-								occupant.movement.stepStart = null;
-							}
-						}
-						else if (occupant.player == this.gameState.humanPlayer)
-							console.log(`Can't stack friendly units`);
-						else if (soldier.movesLeft > 0 && distanceToTarget == 1 && isArchetype(occupant, 'position', 'movement', 'health'))
-							new AttackSoldierAction(soldierEntity, occupant, this.gameState).execute(this.entities);
-					}
-					else
-					{
-						const path = navigateNear(this.gameState, soldier.locate(), target);
-						if (path)
-							new TargetMoveAction(soldierEntity, path).execute(this.entities);
-					}
+					const path = navigateNear(this.gameState, soldier.position.position, target);
+					if (path)
+						new TargetMoveAction(soldier, path).execute(this.entities);
 				}
-				
-				break;
 			}
 		}
 		this.resolvePlayerActions();

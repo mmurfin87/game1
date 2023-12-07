@@ -216,6 +216,7 @@ export class Renderer
 			}
 		}
 	
+		/*
 		// Draw cities
 		gameState.cities.forEach(city => {
 			const offset = this.gridToScreenCoords(city.locate());
@@ -273,7 +274,7 @@ export class Renderer
 			const r = e.renderable;
 			let offset = e.position.position;
 
-			if (e.movement && e.movement.path && e.movement.stepStart && !r.animation)
+			if (e.movement && e.movement.path && e.movement.path.length > 1 && e.movement.stepStart && !r.animation)
 				r.animation = new MoveAnimation(e.movement.stepStart, e.movement.stepDuration, e.movement.path[0], e.movement.path[1]);
 
 			if (r.animation)
@@ -286,14 +287,17 @@ export class Renderer
 			offset = this.gridToScreenCoords(offset);
 			const image = this.imageFor(r.image);
 			if (image.complete)
-				this.ctx.drawImage(image, 0, 0, image.width, image.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
+				this.ctx.drawImage(image, 0, 0, image.width, image.height, offset.x-ts, offset.y + (e.soldier ? -hts/2 : 0), ts*2, ts);
 			else
 			{
 				this.ctx.fillStyle = r.color;
 				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
 			}
 			
-			this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, e.player.color, 12, 'white', ''+e.health?.remaining ?? '???');
+			if (e.city)
+				this.drawColorTextBox(new Point2d(offset.x-ts/2, offset.y + ts), ts, ownerBarHeight, e.player.color, 12, 'black', ''+(e.health?.remaining ?? '???'));
+			if (e.soldier)
+				this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, e.player.color, 12, 'white', ''+(e.health?.remaining ?? '???'));
 			//if (soldier == gameState.selection)
 			//	this.drawSelection(offset, this.tileSize / 3);
 			//soldier.update(gameState);
@@ -324,8 +328,8 @@ export class Renderer
 			}
 		});
 
-		if (gameState.selection)
-			this.drawSelection(this.camera.gridToScreenCoords(gameState.selection.locate()), this.tileSize / (gameState.selection.type == "City" ? 2 : 3));
+		if (gameState.selection && gameState.selection.position && (gameState.selection.city || gameState.selection.soldier))
+			this.drawSelection(this.camera.gridToScreenCoords(gameState.selection.position.position), this.tileSize / (gameState.selection.city ? 2 : 3));
 
 		////////////////////
 		// Test Animation //

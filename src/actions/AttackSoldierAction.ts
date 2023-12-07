@@ -33,7 +33,7 @@ export class AttackSoldierAction implements Action
 				const path = navigateNear(this.gameState, this.attacker.position.position, this.defender.position.position);
 				if (path)
 				{
-					this.attacker.movement.path = [this.attacker.position.position, this.defender.position.position];	// this is a hack until i replace collision detection in the AStar algorithm with ECS components instead of soldiers
+					this.attacker.movement.path = path;
 					this.attacker.movement.stepStart = null;
 					this.attacker.movement.wait = false;
 				}
