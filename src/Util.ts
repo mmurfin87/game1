@@ -1,3 +1,5 @@
+export type With<T, K extends keyof T> = T & { [P in K]-?: T[P] };
+
 export function element(tag: string, attrs?: Record<string, string>, text?: string): HTMLElement
 {
 	const e = document.createElement(tag);

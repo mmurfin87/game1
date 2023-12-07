@@ -2,6 +2,7 @@ import { aStar, navigateNear } from "./AStar.js";
 import { Camera } from "./Camera.js";
 import { City } from "./City.js";
 import { Controller } from "./Controller.js";
+import { Archetype, Entity, isArchetype } from "./Entity.js";
 import { EventDispatch, SimpleEventDispatch } from "./EventDispatch.js";
 import { GameState } from "./GameState.js";
 import { Player } from "./Player.js";
@@ -15,18 +16,12 @@ import { BuildSoldierAction } from "./actions/BuildSoldierAction.js";
 import { HealAction } from "./actions/HealAction.js";
 import { SettleAction } from "./actions/SettleAction.js";
 import { TargetMoveAction } from "./actions/TargetMoveAction.js";
-import { MoveOrderEvent } from "./events/MoveOrderEvent.js";
-import { UnitMovementEvent } from "./events/MovementInitiated.js";
-import { NewSoldierEvent } from "./events/NewSoldierEvent.js";
-import { PlayerSelectionEvent } from "./events/PlayerSelectionEvent.js";
 
 const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight - (canvas.nextElementSibling as HTMLElement).offsetHeight;
 const tileSize = 50;
 const dim = Math.min(Math.floor(canvas.width / tileSize), Math.floor(canvas.height / tileSize));
-
-const eventDispatch: EventDispatch = new SimpleEventDispatch();
 
 const gameState: GameState = (() => {
 	const numRows = dim, numCols = dim;
@@ -46,8 +41,6 @@ const gameState: GameState = (() => {
 		null
 	);
 })();
-// Temporarily for collision checking
-eventDispatch.bind(UnitMovementEvent.name, gameState.unitMovementHandler.bind(gameState));
 
 const camera: Camera = new Camera(0, 0, canvas.width, canvas.height, 1.0, tileSize);
 
@@ -62,21 +55,18 @@ const renderer: Renderer = (() => {
 		tileSize
 	);
 })();
-eventDispatch.bind(NewSoldierEvent.name, renderer.newSoldierHandler.bind(renderer));
-eventDispatch.bind(UnitMovementEvent.name, renderer.unitMovementHandler.bind(renderer));
-eventDispatch.bind(PlayerSelectionEvent.name, renderer.playerSelectionHandler.bind(renderer));
 
-const controller: Controller = new Controller(eventDispatch, gameState, camera, renderer);
+const entities: Entity[] = [];
+
+const controller: Controller = new Controller(entities, gameState, camera, renderer);
 
 const unitMovementSystem = new UnitMovementSystem();
-eventDispatch.bind(NewSoldierEvent.name, unitMovementSystem.newSoldierHandler.bind(unitMovementSystem));
-eventDispatch.bind(MoveOrderEvent.name, unitMovementSystem.moveOrderHandler.bind(unitMovementSystem));
 
 function gameLoop()
 {
 	gameState.currentTime = Date.now();
-	unitMovementSystem.update(eventDispatch, gameState);
-	renderer.render(gameState);
+	unitMovementSystem.update(entities, gameState);
+	renderer.render(entities, gameState);
 	requestAnimationFrame(gameLoop);
 }
 
@@ -88,8 +78,9 @@ camera.centerOnGrid(gameState.cities.filter(c => c.player == gameState.humanPlay
 requestAnimationFrame(gameLoop);
 
 renderer.nextTurn.addEventListener("click", (e: MouseEvent) => {
-	gameState.soldiers.filter(soldier => soldier.player == gameState.humanPlayer).forEach(soldier => soldier.nextTurn(gameState));
+	//gameState.soldiers.filter(soldier => soldier.player == gameState.humanPlayer).forEach(soldier => soldier.nextTurn(gameState));
 	console.log('Next Turn');
+	unitMovementSystem.nextTurn(entities, gameState);
 	gameState.cleanupDefeatedPlayers();
 	aiThink();
 	gameState.cleanupDefeatedPlayers();
@@ -116,28 +107,28 @@ function aiThink()
 		const targets: Positioned[] = [];
 
 		// First, move all my soldiers to attack targets
-		for (const soldier of gameState.soldiers)
+		for (const soldier of entities)
 		{
-			if (soldier.player != player)
+			if (soldier.player != player || !isArchetype(soldier, 'position', 'movement', 'health'))
 				continue;
 			soldierCount++;
 
-			if (soldier.movesLeft < 1)
+			if (soldier.movement.movesLeft < 1)
 				continue;
 
-			const inCity: City | undefined = gameState.searchCoords(soldier.row, soldier.col)
+			const inCity: City | undefined = gameState.searchCoords(soldier.position.position.y, soldier.position.position.x)
 				.filter(p => p.player != player)
 				.filter(City.isType)
-				.find(p => p.row == soldier.row && p.col == soldier.col);
+				.find(p => p.row == soldier.position.position.y && p.col == soldier.position.position.x);
 			if (inCity)
 			{
 				new SettleAction(player, soldier, inCity).execute();
 				continue;
 			}
 
-			const enemiesInRange = gameState.findEnemiesInRange(player, soldier.locate(), 1);
+			const enemiesInRange = gameState.findEnemiesInRange(player, soldier.position.position, 1);
 			// Find the best nearby targets to attack
-			let targetCity: City | null = null, targetSoldier: Soldier | null = null;
+			let targetCity: City | null = null, targetSoldier: Soldier | null = null, targetEntity: Archetype<['position', 'movement', 'health']> | null = null;
 			for (const target of enemiesInRange)
 			{
 				if (targets.includes(target))
@@ -146,35 +137,38 @@ function aiThink()
 				{
 					case "City":
 						if (!gameState.searchCoords(target.row, target.col).find(Soldier.isType))
+						{
 							targetCity = target;
+						}
 						break;
 					case "Soldier":
-						if (targetSoldier == null)
+						if (targetSoldier == null || ((targetEntity?.health?.remaining ?? 1) < (targetEntity?.health?.amount ?? 1)))
+						{
 							targetSoldier = target;
-						else if (targetSoldier.healthLeft > target.health)
-							targetSoldier = target;
+							targetEntity = (entities.find(e => e.soldier == target && isArchetype(e, 'position', 'movement', 'health')) ?? null) as Archetype<['position', 'movement', 'health']> | null;
+						}
 						break;
 				}
 			}
 			if (targetCity != null)
 			{
-				const path = navigateNear(gameState, soldier.locate(), targetCity.locate());
+				const path = navigateNear(gameState, soldier.position.position, targetCity.locate());
 				if (path)
-					new TargetMoveAction(eventDispatch, soldier, path).execute();
+					new TargetMoveAction(soldier, path).execute(entities);
 			}
-			else if (targetSoldier != null)
-				new AttackSoldierAction(soldier, targetSoldier, gameState).execute();
-			else if (soldier.healthLeft < soldier.health)
-				new HealAction(soldier).execute();
+			else if (targetSoldier != null && targetEntity)
+				new AttackSoldierAction(soldier, targetEntity, gameState).execute(entities);
+			else if ((targetEntity?.health?.remaining ?? 1) < (targetEntity?.health?.amount ?? 1))
+				new HealAction(soldier).execute(entities);
 			else
 			{
-				const target = gameState.findNearestEnemyTarget(player, soldier.locate(), targets);
+				const target = gameState.findNearestEnemyTarget(player, soldier.position.position, targets);
 				console.log(`Identified nearest enemy target:`, target);
 				if (target)
 				{
-					const path = navigateNear(gameState, soldier.locate(), target.locate());
+					const path = navigateNear(gameState, soldier.position.position, target.locate());
 					if (path)
-						new TargetMoveAction(eventDispatch, soldier, path).execute();
+						new TargetMoveAction(soldier, path).execute(entities);
 				}
 			}
 		}
@@ -188,9 +182,7 @@ function aiThink()
 				continue;
 
 			if (soldierCount < 3 && !gameState.searchCoords(city.row, city.col).find(Soldier.isType))
-				new BuildSoldierAction(eventDispatch, gameState, player, city).execute();
+				new BuildSoldierAction(gameState, player, city).execute(entities);
 		}
-
-		gameState.soldiers.filter(soldier => soldier.player == player).forEach(soldier => soldier.nextTurn(gameState));
 	}
 }

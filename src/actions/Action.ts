@@ -1,4 +1,6 @@
+import { Entity } from "../Entity.js";
+
 export interface Action
 {
-    execute(): void
+    execute(entities: Entity[]): void
 }

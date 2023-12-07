@@ -1,13 +1,11 @@
 import { Camera } from "./Camera.js";
+import { Entity, isArchetype } from "./Entity.js";
 import { GameState } from "./GameState.js";
 import { Point2d } from "./Point2d.js";
 import { Terrain } from "./Tile.js";
 import { Animation } from "./animations/Animation.js";
 import { MoveAnimation } from "./animations/MoveAnimation.js";
-import { UnitMovementEvent } from "./events/MovementInitiated.js";
-import { NewSoldierEvent } from "./events/NewSoldierEvent.js";
-import { PlayerSelectionEvent } from "./events/PlayerSelectionEvent.js";
-
+import { Renderable } from "./components/Renderable.js";
 function loadimage(url: string): HTMLImageElement
 {
 	const tmp = new Image();
@@ -62,18 +60,6 @@ export class LineDebugObject implements DebugObject
 	}
 }
 
-class Renderable
-{
-	constructor(
-		public id: bigint,
-		public image: HTMLImageElement,
-		public color: string,
-		public position: Point2d,
-		public animation: Animation | null
-	)
-	{}
-}
-
 export class Renderer
 {
 	public readonly debug: DebugObject[] = [];
@@ -114,28 +100,6 @@ export class Renderer
 		this.terrainImage.set(Terrain.WATER, {color: 'blue', image: this.water});
 	}
 
-	newSoldierHandler(event: NewSoldierEvent): void
-	{
-		console.log('Renderer', event);
-		this.renderables.push(new Renderable(event.id, this.soldier, 'yellow', event.position, null));
-	}
-
-	unitMovementHandler(event: UnitMovementEvent): void
-	{
-		console.log('Renderer', event);
-		const renderable = this.renderables.find(r => r.id == event.id);
-		if (!renderable)
-			return;
-		renderable.position = event.target;
-		renderable.animation = new MoveAnimation(event.start, event.duration, event.origin, event.target);
-	}
-
-	playerSelectionHandler(event: PlayerSelectionEvent): void
-	{
-		console.log('Renderer', event);
-
-	}
-
 	private renderVictory(): void
 	{
 		this.ctx.putImageData(this.finalRenderImage as ImageData, 0, 0);
@@ -171,14 +135,14 @@ export class Renderer
 			fireworks.splice(spliceAfter, fireworks.length - spliceAfter);
 	}
 
-	render(gameState: GameState): void
+	render(entities: Entity[], gameState: GameState): void
 	{
 		if (gameState.gameover)
 		{
 			const victory = gameState.checkWinner() == gameState.humanPlayer;
 			if (this.finalRenderImage == null)
 			{
-				this.renderBoard(gameState);
+				this.renderBoard(entities, gameState);
 				this.finalRenderImage = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
 				if (victory)
 					setInterval(() => 
@@ -193,7 +157,7 @@ export class Renderer
 				this.renderDefeat();
 		}
 		else
-			this.renderBoard(gameState);
+			this.renderBoard(entities, gameState);
 
 		this.debug.forEach(d => d.render(this.ctx));
 	}
@@ -219,7 +183,7 @@ export class Renderer
 		this.ctx.stroke();
 	}
 
-	renderBoard(gameState: GameState)
+	renderBoard(entities: Entity[], gameState: GameState)
 	{
 		const vw = this.canvas.width, hvw = vw / 2;
 		const ts = this.tileSize;
@@ -303,8 +267,15 @@ export class Renderer
 		});
 		*/
 
-		this.renderables.forEach(r => {
-			let offset = r.position;
+		entities.forEach(e => {
+			if (!isArchetype(e, 'player', 'position', 'renderable'))
+				return;
+			const r = e.renderable;
+			let offset = e.position.position;
+
+			if (e.movement && e.movement.path && e.movement.stepStart && !r.animation)
+				r.animation = new MoveAnimation(e.movement.stepStart, e.movement.stepDuration, e.movement.path[0], e.movement.path[1]);
+
 			if (r.animation)
 			{
 				const step = r.animation.evaluateAnimationStep(gameState.currentTime, this.camera);
@@ -313,27 +284,27 @@ export class Renderer
 					r.animation = null;
 			}
 			offset = this.gridToScreenCoords(offset);
-			
-			if (r.image.complete)
-				this.ctx.drawImage(r.image, 0, 0, r.image.width, r.image.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
+			const image = this.imageFor(r.image);
+			if (image.complete)
+				this.ctx.drawImage(image, 0, 0, image.width, image.height, offset.x-ts, offset.y-hts/2, ts*2, ts);
 			else
 			{
 				this.ctx.fillStyle = r.color;
 				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
 			}
 			
-			//this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, soldier.player.color, 12, 'white', ''+soldier.healthLeft);
+			this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, e.player.color, 12, 'white', ''+e.health?.remaining ?? '???');
 			//if (soldier == gameState.selection)
 			//	this.drawSelection(offset, this.tileSize / 3);
 			//soldier.update(gameState);
 		});
 
-		// Draw Soldier paths
-		gameState.soldiers.forEach(soldier => {
-			if (soldier.path == null)
+		// Draw Movement paths
+		entities.forEach(entity => {
+			if (entity.movement?.path == null)
 				return;
 			let last = null;
-			for (const step of soldier.path)
+			for (const step of entity.movement.path)
 			{
 				const p = this.gridToScreenCoords(step);
 				this.ctx.beginPath();
@@ -373,6 +344,19 @@ export class Renderer
 		}
 		*/
 		this.ctx.resetTransform();
+	}
+
+	imageFor(key: Renderable['image']): HTMLImageElement
+	{
+		switch (key)
+		{
+			case "soldier":		return this.soldier;
+			case "city":		return this.city;
+			case "grassland":	return this.grasslands;
+			case "forest":		return this.forest;
+			case "mountains":	return this.mountains;
+			case "water":		return this.water;
+		}
 	}
 
 	screenToGridCoords(x: number, y: number): Point2d
