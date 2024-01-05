@@ -3,11 +3,9 @@ import { Camera } from "./Camera.js";
 import { City } from "./City.js";
 import { Controller } from "./Controller.js";
 import { Archetype, Entity, isArchetype } from "./Entity.js";
-import { EventDispatch, SimpleEventDispatch } from "./EventDispatch.js";
 import { EnemyArchetype, GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
-import { Positioned } from "./Positioned.js";
 import { SimpleDebugObject, LineDebugObject, Renderer } from "./Renderer.js";
 import { Soldier } from "./Soldier.js";
 import { UnitMovementSystem } from "./UnitMovementSystem.js";
@@ -104,11 +102,11 @@ function aiThink()
 		// First, move all my soldiers to attack targets
 		for (const soldier of gameState.entities)
 		{
-			if (soldier.player != player || !isArchetype(soldier, 'position', 'movement', 'health', 'soldier'))
+			if (soldier.player != player || !isArchetype(soldier, 'position', 'actionable', 'movement', 'health', 'soldier'))
 				continue;
 			soldierCount++;
 
-			if (soldier.movement.movesLeft < 1)
+			if (soldier.actionable.remaining < 1)
 				continue;
 
 			const inCity: Archetype<['position', 'city', 'player']> | undefined = gameState.search(soldier.position.position, 'city', 'player')
@@ -166,12 +164,12 @@ function aiThink()
 			}
 		}
 
-		for (const city of gameState.entities.filter((e: Entity): e is Archetype<['player', 'position', 'movement', 'health', 'city']> => isArchetype(e, 'player', 'position', 'movement', 'health', 'city')))
+		for (const city of gameState.entities.filter((e: Entity): e is Archetype<['player', 'position', 'actionable', 'city']> => isArchetype(e, 'player', 'position', 'actionable', 'city')))
 		{
 			if (city.player != player)
 				continue;
 
-			if (city.movement.movesLeft < 1)
+			if (city.actionable.remaining < 1)
 				continue;
 
 			if (soldierCount < 3 && gameState.search(city.position.position, 'soldier').length == 0)

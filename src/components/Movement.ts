@@ -6,9 +6,7 @@ export class Movement
 		public path: Point2d[] | null,
 		public stepStart: number | null,
 		public stepDuration: number,
-		public wait: boolean,
-		public moves: number,
-		public movesLeft: number
+		public wait: boolean
 	)
 	{}
 }

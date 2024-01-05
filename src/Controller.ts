@@ -5,7 +5,6 @@ import { Archetype, Entity, isArchetype } from "./Entity.js";
 import { EnemyArchetype, GameState } from "./GameState.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
-import { Positioned } from "./Positioned.js";
 import { Renderer } from "./Renderer.js";
 import { Soldier } from "./Soldier.js";
 import { Terrain } from "./Tile.js";
@@ -58,15 +57,15 @@ export class Controller
 	private calculateActions(player: Player, selection: Entity): ActionOption[]
 	{
 		const actions: ActionOption[] = [];
-		if (isArchetype(selection, 'player', 'position', 'movement', 'health', 'city'))
+		if (isArchetype(selection, 'player', 'position', 'actionable', 'city'))
 		{
 			const nearestEnemy = this.gameState.findNearestEnemyTarget(selection.player, selection.position.position, []);
-			if (selection.movement.movesLeft > 0 && (nearestEnemy == null || nearestEnemy.position.position.stepsTo(selection.position.position) > 0))
+			if (selection.actionable.remaining > 0 && (nearestEnemy == null || nearestEnemy.position.position.stepsTo(selection.position.position) > 0))
 				actions.push(new ActionOption("Train Soldier", () => new BuildSoldierAction(this.gameState, player, selection).execute(this.entities)));
 		}
-		else if (isArchetype(selection, 'player', 'position', 'movement', 'health', 'soldier'))
+		else if (isArchetype(selection, 'player', 'position', 'actionable', 'movement', 'health', 'soldier'))
 		{
-			if (selection.movement.movesLeft > 0)
+			if (selection.actionable.remaining > 0)
 			{
 				if (selection.health.remaining < selection.health.amount)
 					actions.push(new ActionOption("Heal", () => new HealAction(selection).execute(this.entities)));
@@ -128,17 +127,10 @@ export class Controller
 		const coords = this.renderer.screenToGridCoords(e.offsetX, e.offsetY);
 		if (this.moveAction)
 		{
-			try
-			{
+			if (this.gameState.inBounds(coords))
 				this.moveAction(coords).execute(this.entities);
-			}
-			catch (e)
-			{
-				if (e instanceof Error)
-					console.log(e.message);
-				else
-					console.log(e);
-			}
+			else
+				console.log(coords, 'Out of bounds');
 			this.moveAction = null;
 			console.log(`moveAction cleared: ${this.moveAction}`);
 			return;
@@ -161,7 +153,7 @@ export class Controller
 			return;
 		}
 
-		if (isArchetype(this.gameState.selection, 'player', 'position', 'movement', 'health', 'soldier'))
+		if (isArchetype(this.gameState.selection, 'player', 'position', 'actionable', 'movement', 'health', 'soldier'))
 		{
 			const soldier = this.gameState.selection;
 			const origin: Point2d = soldier.position.position;
@@ -185,7 +177,7 @@ export class Controller
 					}
 					else if (occupant.player == this.gameState.humanPlayer)
 						console.log(`Can't stack friendly units`);
-					else if (soldier.movement.movesLeft > 0 && distanceToTarget == 1)
+					else if (soldier.actionable.remaining > 0 && distanceToTarget == 1)
 						new AttackSoldierAction(soldier, occupant, this.gameState).execute(this.entities);
 				}
 				else

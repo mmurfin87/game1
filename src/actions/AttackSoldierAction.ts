@@ -6,8 +6,8 @@ import { Action } from "./Action.js";
 export class AttackSoldierAction implements Action
 {
 	constructor(
-		private readonly attacker: Archetype<['position', 'movement', 'health']>,
-		private readonly defender: Archetype<['position', 'movement', 'health']>,
+		private readonly attacker: Archetype<['position', 'actionable', 'health']>,
+		private readonly defender: Archetype<['position', 'health']>,
 		private readonly gameState: GameState
 	)
 	{}
@@ -15,7 +15,7 @@ export class AttackSoldierAction implements Action
 	execute(entities: Entity[]): void
 	{
 		const distance = this.attacker.position.position.stepsTo(this.defender.position.position);
-		if (this.attacker.movement.movesLeft < distance)
+		if (this.attacker.actionable.remaining < distance)
 			throw new Error("Not enough moves to attack");
 
 		const origHealth = this.defender.health.remaining;
@@ -28,7 +28,7 @@ export class AttackSoldierAction implements Action
 			const defenderIndex = entities.indexOf(this.defender);
 			if (defenderIndex != -1)
 				entities.splice(defenderIndex, 1);
-			if (this.attacker.health.remaining > 0)
+			if (this.attacker.movement && this.attacker.health.remaining > 0)
 			{
 				const path = navigateNear(this.gameState, this.attacker.position.position, this.defender.position.position);
 				if (path)
@@ -42,7 +42,7 @@ export class AttackSoldierAction implements Action
 			}
 		}
 
-		this.attacker.movement.movesLeft -= distance;
+		this.attacker.actionable.remaining -= distance;
 		if (this.attacker.health.remaining <= 0)
 		{
 			const attackerIndex = entities.indexOf(this.attacker);
@@ -50,36 +50,6 @@ export class AttackSoldierAction implements Action
 				entities.splice(attackerIndex, 1);
 		}
 
-		/*
-        if (attackerEntity)
-            attackerEntity.movement = new Movement(this.path, null, 500, false, 2, 2);
-
-		const distance = this.attacker.locate().stepsTo(this.defender.locate());
-		if (this.attacker.movesLeft < distance)
-			throw new Error("Not enough moves to attack");
-		
-		this.defender.healthLeft -= 5;
-
-		if (this.defender.healthLeft > 0)
-			this.attacker.healthLeft -= 6;
-		else
-		{
-			this.gameState.removeSoldier(this.defender);
-			if (this.attacker.healthLeft > 0)
-			{
-				const path = navigateNear(this.gameState, this.attacker.locate(), this.defender.locate());
-				if (path)
-					this.attacker.move(path);
-				else
-					console.log("Can't move to defeated defender position!", this.attacker.locate(), this.defender.locate());
-			}
-		}
-
-		this.attacker.movesLeft -= distance;
-		
-		if (this.attacker.healthLeft <= 0)
-			this.gameState.removeSoldier(this.attacker);
-		*/
 		console.log(`Attacked defender at ${this.defender.position.position} which has ${this.defender.health.remaining} left`);
 	}
 }

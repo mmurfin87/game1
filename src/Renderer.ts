@@ -294,10 +294,10 @@ export class Renderer
 				this.ctx.fillRect(offset.x - ts/4, offset.y + hts/2, hts, hts);
 			}
 			
-			if (e.city)
-				this.drawColorTextBox(new Point2d(offset.x-ts/2, offset.y + ts), ts, ownerBarHeight, e.player.color, 12, 'black', ''+(e.health?.remaining ?? '???'));
-			if (e.soldier)
-				this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, e.player.color, 12, 'white', ''+(e.health?.remaining ?? '???'));
+			if (e.name)
+				this.drawColorTextBox(new Point2d(offset.x-ts/2, offset.y + ts), ts, ownerBarHeight, e.player.color, 12, 'black', e.name.name);
+			if (e.health)
+				this.drawColorTextBox(new Point2d(offset.x, offset.y - hts), hts, ownerBarHeight, e.player.color, 12, 'white', ''+(e.health.remaining));
 			//if (soldier == gameState.selection)
 			//	this.drawSelection(offset, this.tileSize / 3);
 			//soldier.update(gameState);
@@ -375,11 +375,12 @@ export class Renderer
 
 	private drawColorTextBox(origin: Point2d, width: number, height: number, boxColor: string, fontSize: number, fontColor: string, text: string)
 	{
+		this.ctx.font = fontSize + 'px Arial';
+		const metrics: TextMetrics = this.ctx.measureText(text);
+		width = width < metrics.width ? metrics.width + 2 : width;
 		this.ctx.fillStyle = boxColor;
 		this.ctx.fillRect(origin.x, origin.y, width, height);
 		this.ctx.fillStyle = fontColor;
-		this.ctx.font = fontSize + 'px Arial';
-		const metrics: TextMetrics = this.ctx.measureText(text);
 		const actualHeight = metrics.actualBoundingBoxAscent  - metrics.actualBoundingBoxDescent, diffHeight = height - actualHeight, offsetHeight = diffHeight / 2;
 		this.ctx.fillText(text, origin.x+width/2-(metrics.width/2), origin.y + actualHeight + offsetHeight);
 	}

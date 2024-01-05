@@ -2,8 +2,11 @@ import { City } from "./City.js";
 import { Player } from "./Player.js";
 import { Soldier } from "./Soldier.js";
 import { With } from "./Util.js";
+import { Actionable } from "./components/Actionable.js";
 import { Health } from "./components/Health.js";
+import { Moveable } from "./components/Moveable.js";
 import { Movement } from "./components/Movement.js";
+import { Named } from "./components/Named.js";
 import { Position } from "./components/Position.js";
 import { Renderable } from "./components/Renderable.js";
 
@@ -19,9 +22,12 @@ export class Entity
 		public id: bigint,
 		public player?: Player,
 		public position?: Position,
+		public actionable?: Actionable,
+		public moveable?: Moveable,
 		public movement?: Movement,
 		public renderable?: Renderable,
 		public health?: Health,
+		public name?: Named,
 		public soldier?: Soldier,
 		public city?: City
 	)

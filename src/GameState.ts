@@ -3,8 +3,10 @@ import { Archetype, Entity, isArchetype } from "./Entity.js";
 import { Player } from "./Player.js";
 import { Point2d } from "./Point2d.js";
 import { Tile, Terrain } from "./Tile.js";
+import { Actionable } from "./components/Actionable.js";
 import { Health } from "./components/Health.js";
 import { Movement } from "./components/Movement.js";
+import { Named } from "./components/Named.js";
 import { Position } from "./components/Position.js";
 import { Renderable } from "./components/Renderable.js";
 
@@ -25,6 +27,11 @@ export class GameState
 		public selection: Entity | null
 	)
 	{}
+
+	inBounds(coords: Point2d): boolean
+	{
+		return !(coords.x < 0 || coords.x >= this.numCols || coords.y < 0 || coords.y >= this.numRows);
+	}
 
 	checkWinner(): Player | null
 	{
@@ -80,9 +87,12 @@ export class GameState
 							Entity.newId(),
 							this.barbarianPlayer,
 							new Position(new Point2d(col, row)),
-							new Movement(null, null, 0, true, 1, 1),
+							new Actionable(1, 1),
+							undefined,
+							new Movement(null, null, 0, true),
 							new Renderable('city', 'yellow', null),
-							new Health(10, 10),
+							undefined,
+							new Named(City.name()),
 							undefined,
 							new City()) as Archetype<['position', 'player', 'movement', 'city', 'renderable']>
 						);

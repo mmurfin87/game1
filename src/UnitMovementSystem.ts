@@ -1,6 +1,6 @@
 import { GameState } from "./GameState.js";
 import { Soldier } from "./Soldier.js";
-import { Entity, isArchetype } from "./Entity.js";
+import { Archetype, Entity, isArchetype } from "./Entity.js";
 
 
 export class UnitMovementSystem
@@ -13,7 +13,7 @@ export class UnitMovementSystem
 		{
 			if (entity.movement?.path?.length == 0)
 				throw new Error("Path Length 0");
-			if (isArchetype(entity, 'position', 'movement'))
+			if (isArchetype(entity, 'position', 'actionable', 'movement'))
 				follow(entity, false, gameState);
 		}
 	}
@@ -22,20 +22,20 @@ export class UnitMovementSystem
 	{
 		for (const entity of entities)
 		{
-			if (!isArchetype(entity, 'position', 'movement'))
+			if (!isArchetype(entity, 'position', 'actionable', 'movement'))
 				continue;
 			if (entity.movement.path?.length == 0)
 				throw new Error("Path Length 0");
-			if (entity.movement.movesLeft > 0)
+			if (entity.actionable.remaining > 0)
 				follow(entity, true, gameState);
 			entity.movement.wait = true;
-			entity.movement.movesLeft = entity.movement.moves;
+			entity.actionable.remaining = entity.actionable.actions;
 		}
 		this.lastTurn = gameState.currentTurn;
 	}
 }
 
-function follow(entity: Entity, nextTurn: boolean, gameState: GameState): boolean
+function follow(entity: Archetype<['position', 'actionable', 'movement']>, nextTurn: boolean, gameState: GameState): boolean
 {
 	if (!entity.position || !entity.movement)
 		return false;
@@ -43,7 +43,7 @@ function follow(entity: Entity, nextTurn: boolean, gameState: GameState): boolea
 
 	if (movement.path == null)
 		return false;
-	else if (movement.movesLeft < 1)
+	else if (entity.actionable.remaining < 1)
 	{
 		movement.stepStart = null;
 		movement.wait = true;
@@ -57,7 +57,7 @@ function follow(entity: Entity, nextTurn: boolean, gameState: GameState): boolea
 	}
 	else if (movement.stepStart + movement.stepDuration < gameState.currentTime)
 	{
-		if (movement.movesLeft >= 1)
+		if (entity.actionable.remaining >= 1)
 		{
 			const nextCollision = gameState.search(movement.path[1], 'soldier');
 			if (nextCollision.length > 0)
@@ -68,10 +68,10 @@ function follow(entity: Entity, nextTurn: boolean, gameState: GameState): boolea
 				return false;
 			}
 			entity.position.position = movement.path[1];
-			movement.movesLeft -= 1;
+			entity.actionable.remaining -= 1;
 			movement.path.splice(0, 1);
-			movement.stepStart = movement.movesLeft > 0 ? gameState.currentTime : null;
-			if (movement.movesLeft > 0)
+			movement.stepStart = entity.actionable.remaining > 0 ? gameState.currentTime : null;
+			if (entity.actionable.remaining > 0)
 				movement.stepStart = gameState.currentTime;
 			else
 			{
