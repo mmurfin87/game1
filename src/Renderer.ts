@@ -67,12 +67,12 @@ export class Renderer
 	private readonly renderables: Renderable[] = [];
 	private readonly isoTilePath: Path2D;
 	private readonly terrainImage: Map<Terrain, {color: string, image: HTMLImageElement}> = new Map();
-	private readonly grasslands = loadimage("/isograss.png");
-	private readonly forest = loadimage("/isoforest.png");
-	private readonly mountains = loadimage("/isomountain.png");
-	private readonly water = loadimage("/isowater.png");
-	private readonly soldier = loadimage("/soldier.png");
-	private readonly city = loadimage("/city.png");
+	private readonly grasslands = loadimage("isograss.png");
+	private readonly forest = loadimage("isoforest.png");
+	private readonly mountains = loadimage("isomountain.png");
+	private readonly water = loadimage("isowater.png");
+	private readonly soldier = loadimage("soldier.png");
+	private readonly city = loadimage("city.png");
 	private finalRenderImage: ImageData | null = null;
 
 	constructor(

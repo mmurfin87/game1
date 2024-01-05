@@ -57,12 +57,12 @@ export class Renderer {
     renderables = [];
     isoTilePath;
     terrainImage = new Map();
-    grasslands = loadimage("/isograss.png");
-    forest = loadimage("/isoforest.png");
-    mountains = loadimage("/isomountain.png");
-    water = loadimage("/isowater.png");
-    soldier = loadimage("/soldier.png");
-    city = loadimage("/city.png");
+    grasslands = loadimage("isograss.png");
+    forest = loadimage("isoforest.png");
+    mountains = loadimage("isomountain.png");
+    water = loadimage("isowater.png");
+    soldier = loadimage("soldier.png");
+    city = loadimage("city.png");
     finalRenderImage = null;
     constructor(camera, canvas, ctx, actions, unitActions, nextTurn, tileSize) {
         this.camera = camera;
