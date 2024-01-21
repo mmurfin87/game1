@@ -143,7 +143,7 @@ export class GameState
 		let nearest: EnemyArchetype | null = null, dist: number = 0;
 		for (const e of this.entities)
 		{
-			if (!isEnemyArchetype(e) || !(e.city || e.soldier) || e.player == player || exclude.includes(e))
+			if (!isEnemyArchetype(e) /*|| !(e.city || e.soldier)*/ || e.player == player || exclude.includes(e))
 				continue;
 			const stepsTo = origin.stepsTo(e.position.position);
 			if (nearest == null || stepsTo < dist)
@@ -155,19 +155,21 @@ export class GameState
 		return nearest;
 	}
 
-	findEnemiesInRange(player: Player, origin: Point2d, range: number): EnemyArchetype[]
+	findEnemiesInRange<T extends (keyof Entity)[]>(player: Player, origin: Point2d, range: number, ...withComponents: T): Archetype<[...(typeof EnemyArchetypeComponents), ...T]>[]
 	{
-		const result: EnemyArchetype[] = [];
+		type A = Archetype<[...(typeof EnemyArchetypeComponents), ...T]>;
+		const result: A[] = [];
 		for (const e of this.entities)
-			if (isEnemyArchetype(e) && (e.city || e.soldier) && e.player != player && origin.stepsTo(e.position.position) <= range)
-				result.push(e);
+			if (isEnemyArchetype(e) && isArchetype(e, ...withComponents) /*&& (e.city || e.soldier)*/ && e.player != player && origin.stepsTo(e.position.position) <= range)
+				result.push(e as A);
 		return result;
 	}
 }
 
-export type EnemyArchetype = Archetype<['player', 'position', 'movement', 'health']>;
+export const EnemyArchetypeComponents = ['player', 'position'] as const;
+export type EnemyArchetype = Archetype<[...(typeof EnemyArchetypeComponents)]>;
 
 function isEnemyArchetype(e: Entity): e is EnemyArchetype
 {
-	return isArchetype(e, 'player', 'position', 'movement', 'health');
+	return isArchetype(e, 'player', 'position');
 }

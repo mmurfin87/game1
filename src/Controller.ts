@@ -81,11 +81,11 @@ export class Controller
 				const settlement: Archetype<['player', 'position', 'city']> | undefined = this.gameState.search(selection.position.position, 'player', 'city').find(city => city.player != player);
 				if (settlement)
 					actions.push(new ActionOption("Settle", () => new SettleAction(player, selection, settlement).execute()));
-				const enemiesInRange = this.gameState.findEnemiesInRange(player, selection.position.position, 1).filter(e => e.soldier);
+				const enemiesInRange = this.gameState.findEnemiesInRange(player, selection.position.position, 1, 'health').filter(e => e.soldier);
 				if (enemiesInRange.length > 0)
 					actions.push(new ActionOption("Attack", () => { 
 						this.moveAction = (p: Point2d) => {
-							const target: EnemyArchetype | undefined = enemiesInRange.find(pos => Point2d.equivalent(pos.position.position, p));
+							const target: typeof enemiesInRange[number] | undefined = enemiesInRange.find(pos => Point2d.equivalent(pos.position.position, p));
 							if (target)
 								return new AttackSoldierAction(selection, target, this.gameState);
 							else

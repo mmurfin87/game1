@@ -108,7 +108,7 @@ export class GameState {
     findNearestEnemyTarget(player, origin, exclude) {
         let nearest = null, dist = 0;
         for (const e of this.entities) {
-            if (!isEnemyArchetype(e) || !(e.city || e.soldier) || e.player == player || exclude.includes(e))
+            if (!isEnemyArchetype(e) /*|| !(e.city || e.soldier)*/ || e.player == player || exclude.includes(e))
                 continue;
             const stepsTo = origin.stepsTo(e.position.position);
             if (nearest == null || stepsTo < dist) {
@@ -118,14 +118,15 @@ export class GameState {
         }
         return nearest;
     }
-    findEnemiesInRange(player, origin, range) {
+    findEnemiesInRange(player, origin, range, ...withComponents) {
         const result = [];
         for (const e of this.entities)
-            if (isEnemyArchetype(e) && (e.city || e.soldier) && e.player != player && origin.stepsTo(e.position.position) <= range)
+            if (isEnemyArchetype(e) && isArchetype(e, ...withComponents) /*&& (e.city || e.soldier)*/ && e.player != player && origin.stepsTo(e.position.position) <= range)
                 result.push(e);
         return result;
     }
 }
+export const EnemyArchetypeComponents = ['player', 'position'];
 function isEnemyArchetype(e) {
-    return isArchetype(e, 'player', 'position', 'movement', 'health');
+    return isArchetype(e, 'player', 'position');
 }
